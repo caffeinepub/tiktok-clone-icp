@@ -24,7 +24,10 @@ export default function EditProfileModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      data-ocid="edit_profile.modal"
+    >
       <div
         className="absolute inset-0 bg-black/70"
         onClick={onClose}
@@ -38,10 +41,11 @@ export default function EditProfileModal({
           type="button"
           onClick={onClose}
           className="absolute top-4 right-4 text-[#8B95A3]"
+          data-ocid="edit_profile.close_button"
         >
           <X size={20} />
         </button>
-        <h2 className="text-lg font-bold mb-4">Edit Profile</h2>
+        <h2 className="text-lg font-bold mb-5">Edit Profile</h2>
         <div className="space-y-3 mb-5">
           <div>
             <label
@@ -52,9 +56,10 @@ export default function EditProfileModal({
             </label>
             <input
               id="edit-username"
-              className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE]"
+              className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] transition-colors"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              data-ocid="edit_profile.username.input"
             />
           </div>
           <div>
@@ -67,9 +72,10 @@ export default function EditProfileModal({
             <textarea
               id="edit-bio"
               rows={3}
-              className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] resize-none"
+              className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] transition-colors resize-none"
               value={bio}
               onChange={(e) => setBio(e.target.value)}
+              data-ocid="edit_profile.bio.textarea"
             />
           </div>
         </div>
@@ -77,6 +83,7 @@ export default function EditProfileModal({
           type="button"
           onClick={() => onSave({ ...profile, username, bio })}
           className="w-full py-3 rounded-2xl bg-[#22D3EE] text-black font-bold"
+          data-ocid="edit_profile.save.submit_button"
         >
           Save Changes
         </button>

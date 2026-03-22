@@ -2,82 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+  font-family: "Figtree";
+  src: url("/assets/fonts/Figtree.woff2") format("woff2");
+  font-weight: 300 900;
+  font-display: swap;
+}
+
 @layer base {
   :root {
     --radius: 0.625rem;
-    --background: 1 0 0;
-    --foreground: 0.145 0 0;
-    --card: 1 0 0;
-    --card-foreground: 0.145 0 0;
-    --popover: 1 0 0;
-    --popover-foreground: 0.145 0 0;
-    --primary: 0.205 0 0;
-    --primary-foreground: 0.985 0 0;
-    --secondary: 0.97 0 0;
-    --secondary-foreground: 0.205 0 0;
-    --muted: 0.97 0 0;
-    --muted-foreground: 0.556 0 0;
-    --accent: 0.97 0 0;
-    --accent-foreground: 0.205 0 0;
-    --destructive: 0.577 0.245 27.325;
-    --destructive-foreground: 0.985 0 0;
-    --border: 0.922 0 0;
-    --input: 0.922 0 0;
-    --ring: 0.708 0 0;
-    --chart-1: 0.646 0.222 41.116;
-    --chart-2: 0.6 0.118 184.704;
-    --chart-3: 0.398 0.07 227.392;
-    --chart-4: 0.828 0.189 84.429;
-    --chart-5: 0.769 0.188 70.08;
-    --sidebar: 0.985 0 0;
-    --sidebar-foreground: 0.145 0 0;
-    --sidebar-primary: 0.205 0 0;
-    --sidebar-primary-foreground: 0.985 0 0;
-    --sidebar-accent: 0.97 0 0;
-    --sidebar-accent-foreground: 0.205 0 0;
-    --sidebar-border: 0.922 0 0;
-    --sidebar-ring: 0.708 0 0;
-  }
-
-  .dark {
-    --background: 0.145 0 0;
-    --foreground: 0.985 0 0;
-    --card: 0.205 0 0;
-    --card-foreground: 0.985 0 0;
-    --popover: 0.269 0 0;
-    --popover-foreground: 0.985 0 0;
-    --primary: 0.922 0 0;
-    --primary-foreground: 0.205 0 0;
-    --secondary: 0.269 0 0;
-    --secondary-foreground: 0.985 0 0;
-    --muted: 0.269 0 0;
-    --muted-foreground: 0.708 0 0;
-    --accent: 0.371 0 0;
-    --accent-foreground: 0.985 0 0;
-    --destructive: 0.704 0.191 22.216;
-    --destructive-foreground: 0.205 0 0;
-    --border: 1 0 0 / 10%;
-    --input: 1 0 0 / 15%;
-    --ring: 0.556 0 0;
-    --chart-1: 0.488 0.243 264.376;
-    --chart-2: 0.696 0.17 162.48;
-    --chart-3: 0.769 0.188 70.08;
-    --chart-4: 0.627 0.265 303.9;
-    --chart-5: 0.645 0.246 16.439;
-    --sidebar: 0.205 0 0;
-    --sidebar-foreground: 0.985 0 0;
-    --sidebar-primary: 0.488 0.243 264.376;
-    --sidebar-primary-foreground: 0.985 0 0;
-    --sidebar-accent: 0.269 0 0;
-    --sidebar-accent-foreground: 0.985 0 0;
-    --sidebar-border: 1 0 0 / 10%;
-    --sidebar-ring: 0.439 0 0;
+    --background: 0.12 0.015 240;
+    --foreground: 0.93 0.01 240;
+    --card: 0.17 0.015 240;
+    --card-foreground: 0.93 0.01 240;
+    --popover: 0.17 0.015 240;
+    --popover-foreground: 0.93 0.01 240;
+    --primary: 0.82 0.14 200;
+    --primary-foreground: 0.1 0 0;
+    --secondary: 0.24 0.015 240;
+    --secondary-foreground: 0.93 0.01 240;
+    --muted: 0.24 0.015 240;
+    --muted-foreground: 0.62 0.01 240;
+    --accent: 0.82 0.14 200;
+    --accent-foreground: 0.1 0 0;
+    --destructive: 0.6 0.22 15;
+    --destructive-foreground: 0.93 0.01 240;
+    --border: 0.24 0.015 240;
+    --input: 0.24 0.015 240;
+    --ring: 0.82 0.14 200;
+    --chart-1: 0.82 0.14 200;
+    --chart-2: 0.6 0.22 15;
+    --chart-3: 0.75 0.18 130;
+    --chart-4: 0.7 0.16 280;
+    --chart-5: 0.8 0.15 60;
+    --sidebar: 0.17 0.015 240;
+    --sidebar-foreground: 0.93 0.01 240;
+    --sidebar-primary: 0.82 0.14 200;
+    --sidebar-primary-foreground: 0.1 0 0;
+    --sidebar-accent: 0.24 0.015 240;
+    --sidebar-accent-foreground: 0.93 0.01 240;
+    --sidebar-border: 0.24 0.015 240;
+    --sidebar-ring: 0.82 0.14 200;
   }
 
   * {
     @apply border-border;
   }
+
+  html {
+    color-scheme: dark;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-family: "Figtree", system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
   }
 }

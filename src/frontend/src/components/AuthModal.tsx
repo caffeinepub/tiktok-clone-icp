@@ -10,7 +10,10 @@ export default function AuthModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-6"
+      data-ocid="auth.modal"
+    >
       <div
         className="absolute inset-0 bg-black/70"
         onClick={onClose}
@@ -24,6 +27,7 @@ export default function AuthModal({
           type="button"
           onClick={onClose}
           className="absolute top-4 right-4 text-[#8B95A3]"
+          data-ocid="auth.close_button"
         >
           <X size={20} />
         </button>
@@ -44,6 +48,7 @@ export default function AuthModal({
           }}
           disabled={isLoggingIn}
           className="w-full py-4 rounded-2xl bg-[#22D3EE] text-black font-bold text-base disabled:opacity-60"
+          data-ocid="auth.login.primary_button"
         >
           {isLoggingIn ? "Connecting..." : "Continue with Internet Identity"}
         </button>

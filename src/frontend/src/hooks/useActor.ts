@@ -27,9 +27,7 @@ export function useActor() {
 
       const actor = await createActorWithConfig(actorOptions);
       const adminToken = getSecretParameter("caffeineAdminToken") || "";
-      await (
-        actor as unknown as Record<string, (s: string) => Promise<void>>
-      )._initializeAccessControlWithSecret(adminToken);
+      await actor._initializeAccessControlWithSecret(adminToken);
       return actor;
     },
     // Only refetch when identity changes

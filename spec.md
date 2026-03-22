@@ -1,41 +1,44 @@
 # TikTok Clone ICP
 
 ## Current State
-New project — no existing application files.
+New project. No existing application code.
 
 ## Requested Changes (Diff)
 
 ### Add
-- Vertical snap-scrolling video feed (mobile-first)
-- Video upload with title, description, hashtags
-- User profiles with avatar, follower/following counts, bio
-- Like, comment, share on videos
-- Follow / unfollow other users
-- Search videos and users by hashtag or keyword
-- Notifications (likes, comments, follows)
-- Bottom tab navigation: Home, Discover, Upload, Inbox, Profile
 - Internet Identity authentication
-- Blob storage integration for video and image uploads
+- Vertical snap-scroll video feed with auto-play/pause
+- Video upload with title, description, hashtags (blob-storage)
+- User profiles: username, bio, avatar, follower/following counts, total likes
+- Follow / unfollow users
+- Like videos (with total like counts)
+- Comments on videos (nested replies, like a comment, edit/delete own comment)
+- Save/bookmark videos
+- Share video (copy link)
+- Discover/search page: search by title, description, hashtag; trending hashtags
+- Notifications inbox: likes, comments, follows
+- Camera support: open front/back camera, take photo or long-press to record video
+- Default video unmuted
+- Mobile-first responsive dark theme UI
 
 ### Modify
-- N/A
+N/A
 
 ### Remove
-- N/A
+N/A
 
 ## Implementation Plan
-1. Backend (Motoko):
-   - Users: register, getProfile, updateProfile, follow, unfollow, getFollowers, getFollowing
-   - Videos: uploadVideo (metadata), getVideoFeed, getUserVideos, getVideoById, deleteVideo
-   - Interactions: likeVideo, unlikeVideo, addComment, getComments, getNotifications
-   - Search: searchVideos, searchUsers
-   - Blob storage for video files and profile pictures
-2. Frontend:
-   - Mobile-first layout with bottom tab bar
-   - Vertical snap-scroll feed with full-screen video cards
-   - Right action rail: like, comment, share, follow
-   - Upload flow: file picker, metadata form, progress
-   - Profile page: user's videos grid, stats
-   - Discover/Search page
-   - Notifications list
-   - Auth with Internet Identity
+1. Select components: authorization, blob-storage, camera
+2. Generate Motoko backend with:
+   - User profiles (create, update, get, follow/unfollow, followers/following)
+   - Videos (upload metadata, list feed, like, save, getByUser, getByHashtag, search)
+   - Comments (add, reply, edit, delete, like)
+   - Notifications (list, mark read)
+3. Build React frontend:
+   - Bottom nav: Home, Discover, Camera, Inbox, Profile
+   - Home: vertical snap-scroll feed, video player (unmuted default), like/comment/share/save buttons
+   - Discover: search bar, trending hashtags, search results
+   - Camera: front/back toggle, photo snap / long-press record, upload flow
+   - Inbox: notifications list
+   - Profile: own and other users' profiles, follow button, video grid
+   - Comments sheet: nested replies, like/edit/delete
