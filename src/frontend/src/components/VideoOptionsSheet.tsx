@@ -45,6 +45,7 @@ interface VideoOptionsSheetProps {
   onSaveToggle: (id: string) => void;
   onEditSave: (id: string, title: string, desc: string, tags: string[]) => void;
   onPinToggle: (id: string) => void;
+  onDuet?: (videoId: string) => void;
 }
 
 export default function VideoOptionsSheet({
@@ -59,6 +60,7 @@ export default function VideoOptionsSheet({
   onSaveToggle,
   onEditSave,
   onPinToggle,
+  onDuet,
 }: VideoOptionsSheetProps) {
   const { backend, isLoggedIn } = useBackend();
   const [panel, setPanel] = useState<"main" | "report" | "edit">("main");
@@ -221,7 +223,9 @@ export default function VideoOptionsSheet({
       icon: <GitMerge size={20} />,
       label: "Duet",
       action: () => {
-        toast.info("Duet feature coming soon");
+        if (onDuet) {
+          onDuet(video.id);
+        }
         close();
       },
       ocid: "video_options.duet_button",

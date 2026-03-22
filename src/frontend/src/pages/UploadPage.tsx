@@ -2,9 +2,12 @@ import { Film, Image, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import AuthModal from "../components/AuthModal";
 import { useBackend } from "../hooks/useBackend";
+import { useStorageClient } from "../hooks/useStorageClient";
 
 export default function UploadPage({ onDone }: { onDone: () => void }) {
   const { backend, isLoggedIn } = useBackend();
+  const videoStorageClient = useStorageClient("videos");
+  const thumbStorageClient = useStorageClient("thumbnails");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
@@ -14,6 +17,7 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
   const [uploading, setUploading] = useState(false);
   const [done, setDone] = useState(false);
   const [showAuth, setShowAuth] = useState(!isLoggedIn);
+  const [error, setError] = useState<string | null>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const thumbInputRef = useRef<HTMLInputElement>(null);
 
@@ -23,31 +27,44 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
       return;
     }
     if (!videoFile || !title.trim()) return;
+    if (!videoStorageClient || !backend) {
+      setError("Storage not ready. Please try again.");
+      return;
+    }
     setUploading(true);
+    setError(null);
     try {
-      for (let i = 0; i <= 90; i += 10) {
-        setProgress(i);
-        await new Promise((r) => setTimeout(r, 150));
-      }
       const tags = hashtags
         .split(",")
         .map((t) => t.trim().replace(/^#/, ""))
         .filter(Boolean);
-      if (backend) {
-        await backend.postVideo(
-          title,
-          description,
-          tags,
-          `local://${videoFile.name}`,
-          `local://${thumbFile?.name ?? ""}`,
+
+      // Upload video
+      const videoBytes = new Uint8Array(await videoFile.arrayBuffer());
+      const { hash: videoHash } = await videoStorageClient.putFile(
+        videoBytes,
+        (pct) => setProgress(Math.round(pct * 0.85)),
+      );
+
+      // Upload thumbnail if provided
+      let thumbHash = "";
+      if (thumbFile && thumbStorageClient) {
+        const thumbBytes = new Uint8Array(await thumbFile.arrayBuffer());
+        const { hash } = await thumbStorageClient.putFile(thumbBytes, (pct) =>
+          setProgress(85 + Math.round(pct * 0.1)),
         );
+        thumbHash = hash;
       }
+
+      setProgress(95);
+      await backend.postVideo(title, description, tags, videoHash, thumbHash);
       setProgress(100);
       await new Promise((r) => setTimeout(r, 500));
       setDone(true);
       setTimeout(onDone, 1500);
     } catch (e) {
       console.error(e);
+      setError(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
@@ -140,6 +157,7 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
           </label>
           <input
             id="upload-title"
+            data-ocid="upload.title.input"
             className="w-full bg-[#1A1F26] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] placeholder-[#8B95A3] outline-none focus:border-[#22D3EE]"
             placeholder="Add a title..."
             value={title}
@@ -155,6 +173,7 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
           </label>
           <textarea
             id="upload-desc"
+            data-ocid="upload.desc.textarea"
             rows={3}
             className="w-full bg-[#1A1F26] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] placeholder-[#8B95A3] outline-none focus:border-[#22D3EE] resize-none"
             placeholder="Describe your video..."
@@ -171,6 +190,7 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
           </label>
           <input
             id="upload-tags"
+            data-ocid="upload.tags.input"
             className="w-full bg-[#1A1F26] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] placeholder-[#8B95A3] outline-none focus:border-[#22D3EE]"
             placeholder="#fyp, #viral, #dance"
             value={hashtags}
@@ -178,6 +198,15 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
           />
         </div>
       </div>
+
+      {error && (
+        <div
+          className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          data-ocid="upload.error_state"
+        >
+          {error}
+        </div>
+      )}
 
       {uploading && (
         <div className="mb-4">
@@ -199,6 +228,7 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
         onClick={handleUpload}
         disabled={uploading || !videoFile || !title.trim()}
         className="w-full py-4 rounded-2xl bg-[#22D3EE] text-black font-bold text-base disabled:opacity-40"
+        data-ocid="upload.submit_button"
       >
         {uploading ? "Uploading..." : "Post Video"}
       </button>

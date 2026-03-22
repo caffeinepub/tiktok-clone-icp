@@ -1,0 +1,143 @@
+import { Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import type { Story } from "../backend.d";
+import { useBackend } from "../hooks/useBackend";
+import { useStorageClient } from "../hooks/useStorageClient";
+
+interface Props {
+  onOpenViewer: (stories: Story[], creatorId: string) => void;
+  onOpenCreator: () => void;
+  refreshKey?: number;
+}
+
+interface GroupedCreator {
+  creatorId: string;
+  stories: Story[];
+  avatarUrl: string;
+  username: string;
+  hasUnviewed: boolean;
+}
+
+export default function StoriesBar({
+  onOpenViewer,
+  onOpenCreator,
+  refreshKey,
+}: Props) {
+  const { backend, identity, isLoggedIn } = useBackend();
+  const thumbClient = useStorageClient("thumbnails");
+  const [groups, setGroups] = useState<GroupedCreator[]>([]);
+  const [_viewedIds, setViewedIds] = useState<Set<string>>(new Set());
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey prop is intentionally included
+  useEffect(() => {
+    if (!backend) return;
+    const load = async () => {
+      try {
+        const [stories, viewed] = await Promise.all([
+          backend.getActiveStories(),
+          isLoggedIn ? backend.getViewedStoryIds() : Promise.resolve([]),
+        ]);
+        const viewedSet = new Set(viewed as string[]);
+        setViewedIds(viewedSet);
+
+        // Group by creator
+        const map = new Map<string, Story[]>();
+        for (const s of stories as Story[]) {
+          const cid =
+            typeof s.creator === "object"
+              ? s.creator.toString()
+              : String(s.creator);
+          if (!map.has(cid)) map.set(cid, []);
+          map.get(cid)!.push(s);
+        }
+
+        const currentPrincipal = identity?.getPrincipal().toString();
+        const groupsArr: GroupedCreator[] = [];
+
+        for (const [cid, sts] of map.entries()) {
+          if (cid === currentPrincipal) continue; // own story handled separately
+          let avatarUrl = `https://i.pravatar.cc/100?u=${cid}`;
+          const firstKey = sts[0]?.mediaKey;
+          if (thumbClient && firstKey?.startsWith("sha256:")) {
+            try {
+              avatarUrl = await thumbClient.getDirectURL(firstKey);
+            } catch {}
+          }
+          const hasUnviewed = sts.some((s) => !viewedSet.has(s.id));
+          groupsArr.push({
+            creatorId: cid,
+            stories: sts,
+            avatarUrl,
+            username: `${cid.slice(0, 6)}...`,
+            hasUnviewed,
+          });
+        }
+
+        setGroups(groupsArr);
+      } catch {}
+    };
+    load();
+  }, [backend, identity, isLoggedIn, thumbClient, refreshKey]);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="flex gap-3 px-3 py-3 overflow-x-auto scrollbar-hide shrink-0"
+      style={{ WebkitOverflowScrolling: "touch" }}
+      data-ocid="stories.list"
+    >
+      {/* Your Story */}
+      {isLoggedIn && (
+        <button
+          type="button"
+          onClick={onOpenCreator}
+          className="flex flex-col items-center gap-1 shrink-0"
+          data-ocid="stories.add_button"
+        >
+          <div className="relative w-16 h-16">
+            <div className="w-full h-full rounded-full border-2 border-dashed border-[#22D3EE] bg-[#1A1F26] flex items-center justify-center">
+              <Plus size={20} className="text-[#22D3EE]" />
+            </div>
+          </div>
+          <span className="text-[10px] text-[#8B95A3] w-16 text-center truncate">
+            Your Story
+          </span>
+        </button>
+      )}
+
+      {/* Other creators */}
+      {groups.map((g) => (
+        <button
+          key={g.creatorId}
+          type="button"
+          onClick={() => onOpenViewer(g.stories, g.creatorId)}
+          className="flex flex-col items-center gap-1 shrink-0"
+          data-ocid="stories.item.1"
+        >
+          <div className="relative w-16 h-16">
+            <div
+              className="w-full h-full rounded-full p-[2px]"
+              style={{
+                background: g.hasUnviewed
+                  ? "linear-gradient(135deg, #f093fb, #f5576c, #fda085)"
+                  : "#2A3038",
+              }}
+            >
+              <div className="w-full h-full rounded-full overflow-hidden bg-[#1A1F26]">
+                <img
+                  src={g.avatarUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          </div>
+          <span className="text-[10px] text-[#8B95A3] w-16 text-center truncate">
+            {g.username}
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}

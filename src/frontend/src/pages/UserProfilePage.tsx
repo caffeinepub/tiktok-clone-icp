@@ -1,3 +1,4 @@
+import type { Principal } from "@icp-sdk/core/principal";
 import {
   ArrowLeft,
   Grid3x3,
@@ -7,11 +8,18 @@ import {
   UserPlus,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useEffect, useState } from "react";
 import AuthModal from "../components/AuthModal";
+import FollowListModal from "../components/FollowListModal";
 import { useBackend } from "../hooks/useBackend";
-import { SAMPLE_PROFILES, SAMPLE_VIDEOS, formatCount } from "../types/app";
+import { useStorageClient } from "../hooks/useStorageClient";
+import { formatCount } from "../types/app";
+
+interface VideoItem {
+  id: string;
+  views: bigint;
+  thumbUrl?: string;
+}
 
 export default function UserProfilePage({
   creatorId,
@@ -20,36 +28,158 @@ export default function UserProfilePage({
   creatorId: string;
   onBack: () => void;
 }) {
-  const { isLoggedIn } = useBackend();
+  const { isLoggedIn, identity, backend } = useBackend();
+  const thumbStorageClient = useStorageClient("thumbnails");
   const [isFollowing, setIsFollowing] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
-
-  const profile = SAMPLE_PROFILES[creatorId] ?? {
-    principal: creatorId,
-    username: creatorId.slice(0, 12),
-    bio: "VibeFlow creator",
-    avatarKey: `https://i.pravatar.cc/100?u=${creatorId}`,
-    createdAt: BigInt(0),
-  };
-
-  const videos = SAMPLE_VIDEOS.filter((v) => v.creator === creatorId);
-  const followerCount = 8432;
-  const followingCount = 234;
-  const totalLikes = videos.reduce(
-    (acc, _) => acc + Math.floor(Math.random() * 20000 + 5000),
-    0,
+  const [loading, setLoading] = useState(true);
+  const [profileData, setProfileData] = useState<{
+    username: string;
+    bio: string;
+    avatar: string;
+  }>({ username: "", bio: "", avatar: "" });
+  const [videos, setVideos] = useState<VideoItem[]>([]);
+  const [followerCount, setFollowerCount] = useState(0n);
+  const [followingCount, setFollowingCount] = useState(0n);
+  const [totalLikes, setTotalLikes] = useState(0n);
+  const [creatorPrincipal, setCreatorPrincipal] = useState<Principal | null>(
+    null,
   );
+  const [followerPrincipals, setFollowerPrincipals] = useState<Principal[]>([]);
+  const [followingPrincipals, setFollowingPrincipals] = useState<Principal[]>(
+    [],
+  );
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+
+  useEffect(() => {
+    if (!backend || !creatorId) return;
+    setLoading(true);
+
+    const load = async () => {
+      const { Principal } = await import("@icp-sdk/core/principal");
+      let principal: Principal;
+      try {
+        principal = Principal.fromText(creatorId);
+      } catch {
+        principal = Principal.anonymous();
+      }
+      setCreatorPrincipal(principal);
+
+      try {
+        const [profileOpt, vids, stats, followers, following] =
+          await Promise.all([
+            backend.getProfile(principal),
+            backend.getUserVideos(principal),
+            backend.getUserStats(principal),
+            backend.getFollowers(principal),
+            backend.getFollowing(principal),
+          ]);
+
+        if (profileOpt.__kind__ === "Some") {
+          const p = profileOpt.value;
+          let avatar =
+            p.avatarKey || `https://i.pravatar.cc/100?u=${creatorId}`;
+          if (thumbStorageClient && p.avatarKey?.startsWith("sha256:")) {
+            try {
+              avatar = await thumbStorageClient.getDirectURL(p.avatarKey);
+            } catch {}
+          }
+          setProfileData({ username: p.username, bio: p.bio, avatar });
+        } else {
+          setProfileData({
+            username: creatorId.slice(0, 12),
+            bio: "VibeFlow creator",
+            avatar: `https://i.pravatar.cc/100?u=${creatorId}`,
+          });
+        }
+
+        // Resolve video thumbs
+        const resolvedVids: VideoItem[] = await Promise.all(
+          (vids as any[]).map(async (v) => {
+            let thumbUrl =
+              v.thumbnailKey || `https://picsum.photos/seed/${v.id}/400/700`;
+            if (thumbStorageClient && v.thumbnailKey?.startsWith("sha256:")) {
+              try {
+                thumbUrl = await thumbStorageClient.getDirectURL(
+                  v.thumbnailKey,
+                );
+              } catch {}
+            }
+            return { id: v.id, views: v.views, thumbUrl };
+          }),
+        );
+        setVideos(resolvedVids);
+
+        setFollowerCount((stats as any).followerCount);
+        setFollowingCount((stats as any).followingCount);
+
+        // Estimate likes
+        const likeCounts = await Promise.all(
+          (vids as any[])
+            .slice(0, 10)
+            .map((v: any) => backend.getLikeCount(v.id).catch(() => 0n)),
+        );
+        setTotalLikes(
+          likeCounts.reduce(
+            (a: bigint, b: bigint | number) => a + BigInt(b),
+            0n,
+          ),
+        );
+
+        setFollowerPrincipals(followers as Principal[]);
+        setFollowingPrincipals(following as Principal[]);
+
+        // Check if current user follows this creator
+        if (identity) {
+          const myFollowing = await backend.getFollowing(
+            identity.getPrincipal(),
+          );
+          setIsFollowing(
+            (myFollowing as Principal[]).some(
+              (p) => p.toString() === creatorId,
+            ),
+          );
+        }
+      } catch {}
+    };
+
+    load().finally(() => setLoading(false));
+  }, [backend, creatorId, identity, thumbStorageClient]);
 
   const handleFollow = () => {
     if (!isLoggedIn) {
       setShowAuth(true);
       return;
     }
-    setIsFollowing((f) => !f);
-    toast.success(
-      isFollowing ? "Unfollowed" : `Following @${profile.username}!`,
-    );
+    if (!backend || !creatorPrincipal) return;
+    if (isFollowing) {
+      setIsFollowing(false);
+      setFollowerCount((c) => (c > 0n ? c - 1n : 0n));
+      backend.unfollowUser(creatorPrincipal).catch(() => {
+        setIsFollowing(true);
+        setFollowerCount((c) => c + 1n);
+      });
+    } else {
+      setIsFollowing(true);
+      setFollowerCount((c) => c + 1n);
+      backend.followUser(creatorPrincipal).catch(() => {
+        setIsFollowing(false);
+        setFollowerCount((c) => (c > 0n ? c - 1n : 0n));
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <div
+        className="h-full flex items-center justify-center bg-[#0F1216]"
+        data-ocid="user_profile.loading_state"
+      >
+        <div className="w-8 h-8 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -65,7 +195,7 @@ export default function UserProfilePage({
           data-ocid="user_profile.back.button"
         >
           <ArrowLeft size={20} />
-          <span className="font-semibold">@{profile.username}</span>
+          <span className="font-semibold">@{profileData.username}</span>
         </button>
       </div>
 
@@ -74,7 +204,7 @@ export default function UserProfilePage({
         <div className="flex items-start justify-between mb-4">
           <div className="w-20 h-20 rounded-full border-2 border-[#22D3EE] overflow-hidden bg-[#1A1F26]">
             <img
-              src={profile.avatarKey}
+              src={profileData.avatar}
               alt=""
               className="w-full h-full object-cover"
             />
@@ -101,21 +231,42 @@ export default function UserProfilePage({
           </button>
         </div>
 
-        <h2 className="font-bold text-xl">@{profile.username}</h2>
-        <p className="text-[#A6B0BC] text-sm mb-4">{profile.bio}</p>
+        <h2 className="font-bold text-xl">@{profileData.username}</h2>
+        <p className="text-[#A6B0BC] text-sm mb-4">{profileData.bio}</p>
 
         {/* Stats */}
         <div className="flex gap-0 mb-4">
           {[
-            { label: "Videos", value: videos.length || 2 },
-            { label: "Followers", value: formatCount(followerCount) },
-            { label: "Following", value: formatCount(followingCount) },
-            { label: "Likes", value: formatCount(totalLikes) },
+            { label: "Videos", value: videos.length, onClick: undefined },
+            {
+              label: "Followers",
+              value: formatCount(followerCount),
+              onClick: () => setShowFollowers(true),
+            },
+            {
+              label: "Following",
+              value: formatCount(followingCount),
+              onClick: () => setShowFollowing(true),
+            },
+            {
+              label: "Likes",
+              value: formatCount(totalLikes),
+              onClick: undefined,
+            },
           ].map((stat) => (
-            <div key={stat.label} className="flex-1 text-center">
+            <button
+              key={stat.label}
+              type="button"
+              onClick={stat.onClick}
+              className={`flex-1 text-center ${
+                stat.onClick
+                  ? "cursor-pointer active:opacity-70"
+                  : "cursor-default"
+              }`}
+            >
               <p className="font-bold text-lg leading-none">{stat.value}</p>
               <p className="text-[10px] text-[#8B95A3] mt-0.5">{stat.label}</p>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -132,34 +283,70 @@ export default function UserProfilePage({
 
       {/* Videos grid */}
       <div className="px-3 pb-6">
-        {(videos.length > 0 ? videos : SAMPLE_VIDEOS.slice(0, 3)).map(
-          (v, i) => (
-            <motion.div
-              key={v.id}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.06 }}
-              className="relative aspect-[9/16] rounded-lg overflow-hidden bg-[#1A1F26] inline-block"
-              style={{ width: "calc(33.333% - 3px)", margin: "1.5px" }}
-              data-ocid={`user_profile.videos.item.${i + 1}`}
-            >
-              <img
-                src={v.thumbnailKey}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
-                <Play size={9} className="text-white fill-white" />
-                <span className="text-white text-[9px] font-bold">
-                  {formatCount(v.views)}
-                </span>
-              </div>
-            </motion.div>
-          ),
+        {videos.length === 0 ? (
+          <div
+            className="text-center py-16"
+            data-ocid="user_profile.videos.empty_state"
+          >
+            <p className="text-[#8B95A3]">No videos yet</p>
+          </div>
+        ) : (
+          <div
+            className="grid grid-cols-3 gap-1"
+            data-ocid="user_profile.videos.list"
+          >
+            {videos.map((v, i) => (
+              <motion.div
+                key={v.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: i * 0.06 }}
+                className="relative aspect-[9/16] rounded-lg overflow-hidden bg-[#1A1F26]"
+                data-ocid={`user_profile.videos.item.${i + 1}`}
+              >
+                {v.thumbUrl ? (
+                  <img
+                    src={v.thumbUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-[#2A3038]" />
+                )}
+                <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
+                  <Play size={9} className="text-white fill-white" />
+                  <span className="text-white text-[9px] font-bold">
+                    {formatCount(v.views)}
+                  </span>
+                </div>
+              </motion.div>
+            ))}
+          </div>
         )}
       </div>
 
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+
+      {creatorPrincipal && (
+        <>
+          <FollowListModal
+            open={showFollowers}
+            onClose={() => setShowFollowers(false)}
+            title="Followers"
+            principals={followerPrincipals}
+            currentUserPrincipal={identity?.getPrincipal() ?? null}
+            backend={backend}
+          />
+          <FollowListModal
+            open={showFollowing}
+            onClose={() => setShowFollowing(false)}
+            title="Following"
+            principals={followingPrincipals}
+            currentUserPrincipal={identity?.getPrincipal() ?? null}
+            backend={backend}
+          />
+        </>
+      )}
     </div>
   );
 }

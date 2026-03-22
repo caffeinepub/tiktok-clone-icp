@@ -1,38 +1,29 @@
-# VibeFlow v4
+# VibeFlow v9
 
 ## Current State
-VibeFlow is a TikTok-style app with: vertical snap-scroll feed, For You / Following tabs, upload, camera, nested comments (like/reply/edit/delete), search/discover, notifications, user profiles, follow/unfollow, total likes, video save/share/edit.
+VibeFlow is a TikTok+Instagram+Tinder combo app with: vertical video feed, photo posts, Tinder-style swipe/match, DMs, stories, notifications, profile, explore, and settings. The Match page shows swipeable profile cards with basic info (username, bio, video/photo count) and a matches scroll bar.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Trending tab**: A third feed tab ranking videos by total view count (descending). Show alongside For You and Following.
-- **Popular tab**: A fourth feed tab ranking videos by like count (descending).
-- **3-dot options menu** on every video (top-right corner) with 14 features:
-  1. Edit Video (title, description, hashtags -- own videos only)
-  2. Download Video
-  3. Promote/Boost Video
-  4. Share Video (copy link / native share)
-  5. Copy Link
-  6. Add to Favorites / Saved
-  7. Add to Playlist
-  8. Duet
-  9. Stitch
-  10. Report Video
-  11. Not Interested
-  12. Hide Video
-  13. View Creator Profile
-  14. Pin to Profile (own videos only)
-- Backend: `getTrendingFeed`, `getPopularFeed`, `saveVideo`/`unsaveVideo`/`getSavedVideos`, `reportVideo`, `pinVideo`/`unpinVideo`, `hideVideo`/`unhideVideo`
+- **Duet/Collab feature**: Users can create a duet response to any video. A duet plays the original video side-by-side with the user's recorded response. Backend stores duets linked to original videos. Profile shows a "Duets" tab. Video detail/3-dot menu has a "Duet" option.
+- **Match page - mutual friends**: Compute and display mutual followers between the current user and each candidate on swipe cards.
+- **Match page - richer profile**: Show follower count, following count, total content count, and mutual connections on each swipe card.
+- **Match page - profile expand**: Tap a match in the matches row to open a mini-profile modal showing their bio, stats, mutual friends, and a "Message" button.
 
 ### Modify
-- Feed tab bar: extend from 2 tabs (For You, Following) to 4 tabs (For You, Following, Trending, Popular)
+- Match page SwipeCard: Add stats bar showing follower count, mutual connections count, content count.
+- Matches row: Each match avatar is tappable to show a mini-profile before opening chat.
 
 ### Remove
-- Nothing removed
+- Nothing removed.
 
 ## Implementation Plan
-1. Backend: add getTrendingFeed (sort by views desc), getPopularFeed (sort by likes desc), saveVideo/unsaveVideo/getSavedVideos, reportVideo, pinVideo/unpinVideo, hideVideo/unhideVideo
-2. Frontend: add Trending and Popular feed tabs wired to new backend queries
-3. Frontend: add 3-dot icon (MoreVertical) on video cards; tapping opens a bottom-sheet/modal with all 14 actions
-4. Actions routed correctly: owner-only items (Edit, Pin) shown conditionally; Download uses blob URL; Share uses Web Share API with clipboard fallback; Favorites/Saved calls backend; Report calls backend; Not Interested / Hide calls backend
+1. Backend: Add `Duet` type (id, originalVideoId, creatorPrincipal, videoKey, thumbnailKey, caption, createdAt). Add stable storage, counters, and functions: `createDuet`, `getDuetsByVideo`, `getUserDuets`, `deleteDuet`.
+2. Backend: Add `getMutualFollowers(other: Principal)` which returns the count of principals both caller and other follow.
+3. Frontend: Update `backend.d.ts` with new Duet type and API signatures.
+4. Frontend: Enhance MatchPage SwipeCard to show follower count, mutual connections, content stats.
+5. Frontend: Add MatchProfileModal component for tapping matches.
+6. Frontend: Add DuetPage/DuetRecorder that opens when user taps "Duet" from video 3-dot menu -- shows split-screen with original video on left, camera capture on right, record and upload.
+7. Frontend: Add "Duets" tab on ProfilePage showing user's duet recordings.
+8. Frontend: Show duet count on video cards and duet list on VideoDetailPage.

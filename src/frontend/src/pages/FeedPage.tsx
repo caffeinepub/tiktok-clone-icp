@@ -17,31 +17,38 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import type { Story } from "../backend.d";
 import AuthModal from "../components/AuthModal";
 import CommentsDrawer from "../components/CommentsDrawer";
+import StoriesBar from "../components/StoriesBar";
+import StoryCreator from "../components/StoryCreator";
+import StoryViewer from "../components/StoryViewer";
 import VideoOptionsSheet from "../components/VideoOptionsSheet";
 import { useBackend } from "../hooks/useBackend";
-import {
-  SAMPLE_PROFILES,
-  SAMPLE_VIDEOS,
-  type Video,
-  formatCount,
-} from "../types/app";
+import { useStorageClient } from "../hooks/useStorageClient";
+import { type Video, formatCount } from "../types/app";
+
+interface ResolvedVideo extends Video {
+  videoUrl: string;
+  thumbUrl: string;
+  creatorUsername: string;
+  creatorAvatar: string;
+}
 
 interface VideoCardProps {
-  video: Video;
+  video: ResolvedVideo;
   isActive: boolean;
   onViewProfile: (id: string) => void;
   savedIds: Set<string>;
   onToggleSave: (id: string) => void;
   followedIds: Set<string>;
-  onToggleFollow: (id: string) => void;
+  onToggleFollow: (creatorId: string) => void;
   pinnedIds: Set<string>;
   onPinToggle: (id: string) => void;
   onRemoveFromFeed: (id: string) => void;
   onEditSave: (id: string, title: string, desc: string, tags: string[]) => void;
   currentUserPrincipal: string | null;
+  onDuet?: (videoId: string, videoUrl: string) => void;
 }
 
 function VideoCard({
@@ -57,12 +64,11 @@ function VideoCard({
   onRemoveFromFeed,
   onEditSave,
   currentUserPrincipal,
+  onDuet,
 }: VideoCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(
-    Math.floor(Math.random() * 50000) + 5000,
-  );
+  const [likeCount, setLikeCount] = useState<bigint>(0n);
   const [muted, setMuted] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -71,17 +77,29 @@ function VideoCard({
   const [showAuth, setShowAuth] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const lastTap = useRef(0);
-  const { isLoggedIn } = useBackend();
+  const { isLoggedIn, backend } = useBackend();
   const isSaved = savedIds.has(video.id);
-  const isFollowed = followedIds.has(video.creator);
+  const creatorId =
+    typeof video.creator === "object"
+      ? (video.creator as { toString(): string }).toString()
+      : String(video.creator);
+  const isFollowed = followedIds.has(creatorId);
   const isPinned = pinnedIds.has(video.id);
-  const isOwner = currentUserPrincipal === video.creator;
+  const isOwner = currentUserPrincipal === creatorId;
 
-  const profile = SAMPLE_PROFILES[video.creator] ?? {
-    username: video.creator.slice(0, 8),
-    avatarKey: `https://i.pravatar.cc/100?u=${video.creator}`,
-    bio: "",
-  };
+  // Load real like count and whether caller liked
+  useEffect(() => {
+    if (!backend) return;
+    Promise.all([
+      backend.getLikeCount(video.id),
+      backend.didCallerLike(video.id),
+    ])
+      .then(([count, didLike]) => {
+        setLikeCount(count);
+        setLiked(didLike);
+      })
+      .catch(() => {});
+  }, [backend, video.id]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -113,6 +131,13 @@ function VideoCard({
     return () => el.removeEventListener("timeupdate", onTime);
   }, []);
 
+  // Increment view count when video becomes active
+  useEffect(() => {
+    if (isActive && backend) {
+      backend.incrementView(video.id).catch(() => {});
+    }
+  }, [isActive, backend, video.id]);
+
   const togglePlay = () => {
     const el = videoRef.current;
     if (!el) return;
@@ -130,29 +155,37 @@ function VideoCard({
     if (now - lastTap.current < 300) {
       if (!liked) {
         setLiked(true);
-        setLikeCount((c) => c + 1);
+        setLikeCount((c) => c + 1n);
         setShowHeart(true);
         setTimeout(() => setShowHeart(false), 900);
+        if (backend) backend.likeVideo(video.id).catch(() => {});
       }
     }
     lastTap.current = now;
-  }, [liked]);
+  }, [liked, backend, video.id]);
 
   const handleLike = () => {
     if (!isLoggedIn) {
       setShowAuth(true);
       return;
     }
-    setLiked((l) => !l);
-    setLikeCount((c) => (liked ? c - 1 : c + 1));
+    if (!backend) return;
+    if (liked) {
+      setLiked(false);
+      setLikeCount((c) => (c > 0n ? c - 1n : 0n));
+      backend.unlikeVideo(video.id).catch(() => {});
+    } else {
+      setLiked(true);
+      setLikeCount((c) => c + 1n);
+      setShowHeart(true);
+      setTimeout(() => setShowHeart(false), 900);
+      backend.likeVideo(video.id).catch(() => {});
+    }
   };
 
   const handleShare = () => {
     const url = `${window.location.origin}?v=${video.id}`;
-    navigator.clipboard
-      .writeText(url)
-      .then(() => toast.success("Link copied!"))
-      .catch(() => toast.error("Could not copy link"));
+    navigator.clipboard.writeText(url).catch(() => {});
   };
 
   const handleSave = () => {
@@ -161,7 +194,6 @@ function VideoCard({
       return;
     }
     onToggleSave(video.id);
-    toast.success(isSaved ? "Removed from saved" : "Saved!");
   };
 
   const handleFollow = () => {
@@ -169,8 +201,7 @@ function VideoCard({
       setShowAuth(true);
       return;
     }
-    onToggleFollow(video.creator);
-    toast.success(isFollowed ? "Unfollowed" : "Following!");
+    onToggleFollow(creatorId);
   };
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -181,7 +212,13 @@ function VideoCard({
     el.currentTime = pct * el.duration;
   };
 
-  const commentCount = Math.floor(Math.random() * 5000) + 200;
+  // Convert video to old Video type for VideoOptionsSheet
+  const videoForSheet: Video = {
+    ...video,
+    videoKey: video.videoUrl,
+    thumbnailKey: video.thumbUrl,
+    creator: creatorId,
+  };
 
   return (
     <>
@@ -192,7 +229,7 @@ function VideoCard({
       >
         <video
           ref={videoRef}
-          src={video.videoKey}
+          src={video.videoUrl}
           className="absolute inset-0 w-full h-full object-cover"
           loop
           muted={muted}
@@ -235,7 +272,6 @@ function VideoCard({
 
         {/* Top-right controls: 3-dot menu + mute */}
         <div className="absolute top-4 right-3 z-20 flex flex-col items-center gap-2">
-          {/* 3-dot options button */}
           <button
             type="button"
             onClick={(e) => {
@@ -253,7 +289,6 @@ function VideoCard({
             <MoreVertical size={18} className="text-white" />
           </button>
 
-          {/* Mute toggle */}
           <button
             type="button"
             onClick={(e) => {
@@ -278,14 +313,14 @@ function VideoCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onViewProfile(video.creator);
+              onViewProfile(creatorId);
             }}
             className="relative flex flex-col items-center"
             data-ocid="feed.profile.button"
           >
             <img
-              src={profile.avatarKey}
-              alt={profile.username}
+              src={video.creatorAvatar}
+              alt={video.creatorUsername}
               className="w-12 h-12 rounded-full border-2 border-white object-cover"
             />
             <button
@@ -343,7 +378,7 @@ function VideoCard({
               <MessageCircle size={26} className="text-white" />
             </div>
             <span className="text-xs font-bold text-white drop-shadow">
-              {formatCount(commentCount)}
+              Comment
             </span>
           </button>
 
@@ -394,7 +429,7 @@ function VideoCard({
             style={{ animationDuration: "5s" }}
           >
             <img
-              src={profile.avatarKey}
+              src={video.creatorAvatar}
               alt=""
               className="w-full h-full object-cover"
             />
@@ -407,12 +442,12 @@ function VideoCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onViewProfile(video.creator);
+              onViewProfile(creatorId);
             }}
             className="flex items-center gap-2 mb-2"
           >
             <span className="font-bold text-white text-sm">
-              @{profile.username}
+              @{video.creatorUsername}
             </span>
             <button
               type="button"
@@ -435,7 +470,7 @@ function VideoCard({
           <div className="flex items-center gap-1 text-white text-xs">
             <Music size={11} />
             <span className="truncate">
-              Original sound \u2013 {profile.username}
+              Original sound \u2013 {video.creatorUsername}
             </span>
           </div>
         </div>
@@ -490,7 +525,7 @@ function VideoCard({
       <VideoOptionsSheet
         open={showOptions}
         onClose={() => setShowOptions(false)}
-        video={video}
+        video={videoForSheet}
         isOwner={isOwner}
         isSaved={isSaved}
         isPinned={isPinned}
@@ -499,23 +534,26 @@ function VideoCard({
         onSaveToggle={onToggleSave}
         onEditSave={onEditSave}
         onPinToggle={onPinToggle}
+        onDuet={onDuet ? (id) => onDuet(id, video.videoUrl) : undefined}
       />
     </>
   );
 }
 
 interface VideoScrollFeedProps {
-  videos: Video[];
+  videos: ResolvedVideo[];
   onViewProfile: (id: string) => void;
   savedIds: Set<string>;
   onToggleSave: (id: string) => void;
   followedIds: Set<string>;
-  onToggleFollow: (id: string) => void;
+  onToggleFollow: (creatorId: string) => void;
   pinnedIds: Set<string>;
   onPinToggle: (id: string) => void;
   onRemoveFromFeed: (id: string) => void;
   onEditSave: (id: string, title: string, desc: string, tags: string[]) => void;
   currentUserPrincipal: string | null;
+  feedActive: boolean;
+  onDuet?: (videoId: string, videoUrl: string) => void;
 }
 
 function VideoScrollFeed({
@@ -530,6 +568,8 @@ function VideoScrollFeed({
   onRemoveFromFeed,
   onEditSave,
   currentUserPrincipal,
+  feedActive,
+  onDuet,
 }: VideoScrollFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -569,7 +609,7 @@ function VideoScrollFeed({
         >
           <VideoCard
             video={video}
-            isActive={i === activeIndex}
+            isActive={feedActive && i === activeIndex}
             onViewProfile={onViewProfile}
             savedIds={savedIds}
             onToggleSave={onToggleSave}
@@ -580,6 +620,7 @@ function VideoScrollFeed({
             onRemoveFromFeed={onRemoveFromFeed}
             onEditSave={onEditSave}
             currentUserPrincipal={currentUserPrincipal}
+            onDuet={onDuet}
           />
         </div>
       ))}
@@ -623,16 +664,140 @@ const TAB_CONFIG: Array<{
 
 export default function FeedPage({
   onViewProfile,
-}: { onViewProfile: (id: string) => void }) {
-  const [allVideos, setAllVideos] = useState<Video[]>(SAMPLE_VIDEOS);
+  isActive,
+}: {
+  onViewProfile: (id: string) => void;
+  isActive: boolean;
+  onDuet?: (videoId: string, videoUrl: string) => void;
+}) {
+  const { backend, isLoggedIn, identity } = useBackend();
+  const videoStorageClient = useStorageClient("videos");
+  const thumbStorageClient = useStorageClient("thumbnails");
+  const [rawVideos, setRawVideos] = useState<Video[]>([]);
+  const [resolvedVideos, setResolvedVideos] = useState<ResolvedVideo[]>([]);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<FeedTab>("for-you");
   const [showAuth, setShowAuth] = useState(false);
-  const { isLoggedIn, identity } = useBackend();
+  const [loading, setLoading] = useState(true);
+  const [storyRefreshKey, setStoryRefreshKey] = useState(0);
+  const [viewerStories, setViewerStories] = useState<Story[] | null>(null);
+  const [viewerCreatorId, setViewerCreatorId] = useState<string>("");
+  const [showStoryCreator, setShowStoryCreator] = useState(false);
   const currentUserPrincipal = identity?.getPrincipal().toString() ?? null;
+
+  // Load feed from backend
+  useEffect(() => {
+    if (!backend) return;
+    setLoading(true);
+    backend
+      .getFeed(0n, 20n)
+      .then((vids) => {
+        setRawVideos(vids as Video[]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [backend]);
+
+  // Load followed IDs
+  useEffect(() => {
+    if (!backend || !identity) return;
+    backend
+      .getFollowing(identity.getPrincipal())
+      .then((principals) => {
+        setFollowedIds(
+          new Set(
+            principals.map((p) =>
+              typeof p === "object"
+                ? (p as { toString(): string }).toString()
+                : String(p),
+            ),
+          ),
+        );
+      })
+      .catch(() => {});
+  }, [backend, identity]);
+
+  // Resolve hashes to URLs and load creator profiles
+  useEffect(() => {
+    if (!rawVideos.length) {
+      setResolvedVideos([]);
+      return;
+    }
+    let cancelled = false;
+
+    const resolveVideos = async () => {
+      const resolved = await Promise.all(
+        rawVideos.map(async (v) => {
+          const creatorId =
+            typeof v.creator === "object"
+              ? (v.creator as { toString(): string }).toString()
+              : String(v.creator);
+
+          // Resolve video URL
+          let videoUrl = v.videoKey;
+          if (videoStorageClient && v.videoKey.startsWith("sha256:")) {
+            try {
+              videoUrl = await videoStorageClient.getDirectURL(v.videoKey);
+            } catch {}
+          }
+
+          // Resolve thumbnail URL
+          let thumbUrl =
+            v.thumbnailKey || `https://i.pravatar.cc/400?u=${v.id}`;
+          if (thumbStorageClient && v.thumbnailKey?.startsWith("sha256:")) {
+            try {
+              thumbUrl = await thumbStorageClient.getDirectURL(v.thumbnailKey);
+            } catch {}
+          }
+
+          // Load creator profile
+          let creatorUsername = `${creatorId.slice(0, 8)}...`;
+          let creatorAvatar = `https://i.pravatar.cc/100?u=${creatorId}`;
+          if (backend) {
+            try {
+              const { Principal } = await import("@icp-sdk/core/principal");
+              const principalObj = Principal.fromText(creatorId);
+              const profileOpt = await backend.getProfile(principalObj);
+              if (profileOpt.__kind__ === "Some") {
+                creatorUsername = profileOpt.value.username;
+                const ak = profileOpt.value.avatarKey;
+                if (ak) {
+                  if (thumbStorageClient && ak.startsWith("sha256:")) {
+                    try {
+                      creatorAvatar = await thumbStorageClient.getDirectURL(ak);
+                    } catch {
+                      creatorAvatar = `https://i.pravatar.cc/100?u=${creatorId}`;
+                    }
+                  } else {
+                    creatorAvatar =
+                      ak || `https://i.pravatar.cc/100?u=${creatorId}`;
+                  }
+                }
+              }
+            } catch {}
+          }
+
+          return {
+            ...v,
+            creator: creatorId,
+            videoUrl,
+            thumbUrl,
+            creatorUsername,
+            creatorAvatar,
+          } as ResolvedVideo;
+        }),
+      );
+      if (!cancelled) setResolvedVideos(resolved);
+    };
+
+    resolveVideos();
+    return () => {
+      cancelled = true;
+    };
+  }, [rawVideos, videoStorageClient, thumbStorageClient, backend]);
 
   const toggleSave = (id: string) => {
     setSavedIds((prev) => {
@@ -643,11 +808,21 @@ export default function FeedPage({
     });
   };
 
-  const toggleFollow = (id: string) => {
+  const toggleFollow = (creatorId: string) => {
+    if (!backend || !identity) return;
     setFollowedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(creatorId)) {
+        next.delete(creatorId);
+        import("@icp-sdk/core/principal").then(({ Principal }) => {
+          backend.unfollowUser(Principal.fromText(creatorId)).catch(() => {});
+        });
+      } else {
+        next.add(creatorId);
+        import("@icp-sdk/core/principal").then(({ Principal }) => {
+          backend.followUser(Principal.fromText(creatorId)).catch(() => {});
+        });
+      }
       return next;
     });
   };
@@ -655,7 +830,6 @@ export default function FeedPage({
   const togglePin = (id: string) => {
     setPinnedIds((prev) => {
       const next = new Set(prev);
-      // Only one pin at a time — clear all others
       next.clear();
       if (!prev.has(id)) next.add(id);
       return next;
@@ -672,27 +846,26 @@ export default function FeedPage({
     desc: string,
     tags: string[],
   ) => {
-    setAllVideos((prev) =>
+    setRawVideos((prev) =>
       prev.map((v) =>
         v.id === id ? { ...v, title, description: desc, hashtags: tags } : v,
       ),
     );
   };
 
-  const visibleVideos = allVideos.filter((v) => !hiddenIds.has(v.id));
+  const visibleVideos = resolvedVideos.filter((v) => !hiddenIds.has(v.id));
 
   const trendingVideos = [...visibleVideos].sort(
     (a, b) => Number(b.views) - Number(a.views),
   );
 
-  // Popular = by like count (approximated from views for sample data)
   const popularVideos = [...visibleVideos].sort(
     (a, b) => Number(b.views) * 0.05 - Number(a.views) * 0.05,
   );
 
   const filteredVideos =
     activeTab === "following"
-      ? visibleVideos.filter((v) => followedIds.has(v.creator))
+      ? visibleVideos.filter((v) => followedIds.has(v.creator as string))
       : activeTab === "trending"
         ? trendingVideos
         : activeTab === "popular"
@@ -703,162 +876,210 @@ export default function FeedPage({
     activeTab === "following" && (!isLoggedIn || followedIds.size === 0);
 
   return (
-    <div className="relative h-full">
-      {/* Tab switcher - overlaid at top center */}
-      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-3 pb-2 pointer-events-none">
-        <div
-          className="flex items-center gap-0.5 bg-black/25 backdrop-blur-md rounded-full px-1 py-1 pointer-events-auto"
-          style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.4)" }}
-        >
-          {TAB_CONFIG.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className="relative flex items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-all duration-200 rounded-full"
-              data-ocid={tab.ocid}
-              style={{
-                color: activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.5)",
-                background:
-                  activeTab === tab.id
-                    ? "rgba(255,255,255,0.15)"
-                    : "transparent",
-              }}
-            >
-              <span
+    <div className="relative h-full flex flex-col">
+      {/* Stories bar */}
+      <StoriesBar
+        onOpenViewer={(stories, creatorId) => {
+          setViewerStories(stories);
+          setViewerCreatorId(creatorId);
+        }}
+        onOpenCreator={() => setShowStoryCreator(true)}
+        refreshKey={storyRefreshKey}
+      />
+      <div className="relative flex-1 overflow-hidden">
+        {/* Tab switcher */}
+        <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-3 pb-2 pointer-events-none">
+          <div
+            className="flex items-center gap-0.5 bg-black/25 backdrop-blur-md rounded-full px-1 py-1 pointer-events-auto"
+            style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.4)" }}
+          >
+            {TAB_CONFIG.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className="relative flex items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-all duration-200 rounded-full"
+                data-ocid={tab.ocid}
                 style={{
                   color:
+                    activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.5)",
+                  background:
                     activeTab === tab.id
-                      ? tab.id === "trending"
-                        ? "#22D3EE"
-                        : tab.id === "popular"
-                          ? "#FF3B5C"
-                          : "#fff"
-                      : "rgba(255,255,255,0.45)",
+                      ? "rgba(255,255,255,0.15)"
+                      : "transparent",
                 }}
               >
-                {tab.icon}
-              </span>
-              {tab.label}
-              {activeTab === tab.id && (
-                <motion.div
-                  layoutId="tab-indicator"
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: "rgba(255,255,255,0.12)" }}
-                  transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                />
-              )}
-            </button>
-          ))}
+                <span
+                  style={{
+                    color:
+                      activeTab === tab.id
+                        ? tab.id === "trending"
+                          ? "#22D3EE"
+                          : tab.id === "popular"
+                            ? "#FF3B5C"
+                            : "#fff"
+                        : "rgba(255,255,255,0.45)",
+                  }}
+                >
+                  {tab.icon}
+                </span>
+                {tab.label}
+                {activeTab === tab.id && (
+                  <motion.div
+                    layoutId="tab-indicator"
+                    className="absolute inset-0 rounded-full"
+                    style={{ background: "rgba(255,255,255,0.12)" }}
+                    transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                  />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* Tab badge for trending/popular */}
-      <AnimatePresence>
-        {(activeTab === "trending" || activeTab === "popular") && (
-          <motion.div
-            key={activeTab}
-            className="absolute top-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-          >
-            <div
-              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-              style={{
-                background:
-                  activeTab === "trending"
-                    ? "rgba(34,211,238,0.15)"
-                    : "rgba(255,59,92,0.15)",
-                border:
-                  activeTab === "trending"
-                    ? "1px solid rgba(34,211,238,0.3)"
-                    : "1px solid rgba(255,59,92,0.3)",
-                color: activeTab === "trending" ? "#22D3EE" : "#FF3B5C",
-              }}
+        {/* Tab badge */}
+        <AnimatePresence>
+          {(activeTab === "trending" || activeTab === "popular") && (
+            <motion.div
+              key={activeTab}
+              className="absolute top-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
             >
-              {activeTab === "trending" ? (
-                <TrendingUp size={11} />
-              ) : (
-                <Flame size={11} />
-              )}
-              {activeTab === "trending" ? "Most Viewed" : "Most Liked"}
+              <div
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+                style={{
+                  background:
+                    activeTab === "trending"
+                      ? "rgba(34,211,238,0.15)"
+                      : "rgba(255,59,92,0.15)",
+                  border:
+                    activeTab === "trending"
+                      ? "1px solid rgba(34,211,238,0.3)"
+                      : "1px solid rgba(255,59,92,0.3)",
+                  color: activeTab === "trending" ? "#22D3EE" : "#FF3B5C",
+                }}
+              >
+                {activeTab === "trending" ? (
+                  <TrendingUp size={11} />
+                ) : (
+                  <Flame size={11} />
+                )}
+                {activeTab === "trending" ? "Most Viewed" : "Most Liked"}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Loading state */}
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-10 h-10 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
+              <p className="text-[#8B95A3] text-sm">Loading feed...</p>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
 
-      {/* Empty state for following tab */}
-      <AnimatePresence>
-        {showFollowingEmpty && (
-          <motion.div
-            key="empty-following"
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black gap-4 px-8 text-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            data-ocid="feed.following.empty_state"
-          >
-            {!isLoggedIn ? (
-              <>
-                <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-2">
-                  <Heart size={36} className="text-[#FF3B5C]" />
-                </div>
-                <p className="text-white text-lg font-bold">
-                  Log in to see your feed
-                </p>
-                <p className="text-white/60 text-sm">
-                  Log in to see videos from creators you follow
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setShowAuth(true)}
-                  className="mt-2 px-6 py-2.5 bg-[#FF3B5C] text-white font-bold rounded-full text-sm active:opacity-80"
-                  data-ocid="feed.following.primary_button"
-                >
-                  Log In
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-2">
-                  <Compass size={36} className="text-white/70" />
-                </div>
-                <p className="text-white text-lg font-bold">No videos yet</p>
-                <p className="text-white/60 text-sm">
-                  Follow some creators to see their videos here
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("for-you")}
-                  className="mt-2 px-6 py-2.5 bg-white/10 border border-white/20 text-white font-semibold rounded-full text-sm active:opacity-80"
-                  data-ocid="feed.discover.button"
-                >
-                  Discover Creators
-                </button>
-              </>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+        {/* Empty state for following tab */}
+        <AnimatePresence>
+          {showFollowingEmpty && (
+            <motion.div
+              key="empty-following"
+              className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black gap-4 px-8 text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              data-ocid="feed.following.empty_state"
+            >
+              {!isLoggedIn ? (
+                <>
+                  <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-2">
+                    <Heart size={36} className="text-[#FF3B5C]" />
+                  </div>
+                  <p className="text-white text-lg font-bold">
+                    Log in to see your feed
+                  </p>
+                  <p className="text-white/60 text-sm">
+                    Log in to see videos from creators you follow
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAuth(true)}
+                    className="mt-2 px-6 py-2.5 bg-[#FF3B5C] text-white font-bold rounded-full text-sm active:opacity-80"
+                    data-ocid="feed.following.primary_button"
+                  >
+                    Log In
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-2">
+                    <Compass size={36} className="text-white/70" />
+                  </div>
+                  <p className="text-white text-lg font-bold">No videos yet</p>
+                  <p className="text-white/60 text-sm">
+                    Follow some creators to see their videos here
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("for-you")}
+                    className="mt-2 px-6 py-2.5 bg-white/10 border border-white/20 text-white font-semibold rounded-full text-sm active:opacity-80"
+                    data-ocid="feed.discover.button"
+                  >
+                    Discover Creators
+                  </button>
+                </>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-      {/* Video feed */}
-      <VideoScrollFeed
-        key={activeTab}
-        videos={filteredVideos}
-        onViewProfile={onViewProfile}
-        savedIds={savedIds}
-        onToggleSave={toggleSave}
-        followedIds={followedIds}
-        onToggleFollow={toggleFollow}
-        pinnedIds={pinnedIds}
-        onPinToggle={togglePin}
-        onRemoveFromFeed={removeFromFeed}
-        onEditSave={handleEditSave}
-        currentUserPrincipal={currentUserPrincipal}
-      />
+        {/* Video feed */}
+        <VideoScrollFeed
+          key={activeTab}
+          videos={filteredVideos}
+          onViewProfile={onViewProfile}
+          savedIds={savedIds}
+          onToggleSave={toggleSave}
+          followedIds={followedIds}
+          onToggleFollow={toggleFollow}
+          pinnedIds={pinnedIds}
+          onPinToggle={togglePin}
+          onRemoveFromFeed={removeFromFeed}
+          onEditSave={handleEditSave}
+          currentUserPrincipal={currentUserPrincipal}
+          feedActive={isActive}
+        />
 
-      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+
+        {/* Story Viewer */}
+        <AnimatePresence>
+          {viewerStories && (
+            <StoryViewer
+              stories={viewerStories}
+              creatorId={viewerCreatorId}
+              onClose={() => setViewerStories(null)}
+              onDeleted={() => setStoryRefreshKey((k) => k + 1)}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Story Creator */}
+        <AnimatePresence>
+          {showStoryCreator && (
+            <StoryCreator
+              onClose={() => setShowStoryCreator(false)}
+              onCreated={() => {
+                setStoryRefreshKey((k) => k + 1);
+                setShowStoryCreator(false);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
