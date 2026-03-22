@@ -54,15 +54,28 @@ actor {
     createdAt : Int;
   };
 
+  public type Report = {
+    id : Text;
+    videoId : Text;
+    reporter : Principal;
+    reason : Text;
+    createdAt : Int;
+  };
+
   stable var _users : [(Text, UserProfile)] = [];
   stable var _videos : [(Text, Video)] = [];
   stable var _comments : [(Text, Comment)] = [];
   stable var _notifications : [(Text, Notification)] = [];
   stable var _likes : [(Text, [Principal])] = [];
   stable var _following : [(Text, [Principal])] = [];
+  stable var _savedVideos : [(Text, [Text])] = [];
+  stable var _hiddenVideos : [(Text, [Text])] = [];
+  stable var _pinnedVideos : [(Text, Text)] = [];
+  stable var _reports : [(Text, Report)] = [];
   stable var _videoCounter : Nat = 0;
   stable var _commentCounter : Nat = 0;
   stable var _notifCounter : Nat = 0;
+  stable var _reportCounter : Nat = 0;
 
   var users : Map.Map<Text, UserProfile> = Map.fromArray(_users);
   var videos : Map.Map<Text, Video> = Map.fromArray(_videos);
@@ -70,6 +83,10 @@ actor {
   var notifications : Map.Map<Text, Notification> = Map.fromArray(_notifications);
   var likes : Map.Map<Text, [Principal]> = Map.fromArray(_likes);
   var following : Map.Map<Text, [Principal]> = Map.fromArray(_following);
+  var savedVideos : Map.Map<Text, [Text]> = Map.fromArray(_savedVideos);
+  var hiddenVideos : Map.Map<Text, [Text]> = Map.fromArray(_hiddenVideos);
+  var pinnedVideos : Map.Map<Text, Text> = Map.fromArray(_pinnedVideos);
+  var reports : Map.Map<Text, Report> = Map.fromArray(_reports);
 
   system func preupgrade() {
     _users := users.toArray();
@@ -78,6 +95,10 @@ actor {
     _notifications := notifications.toArray();
     _likes := likes.toArray();
     _following := following.toArray();
+    _savedVideos := savedVideos.toArray();
+    _hiddenVideos := hiddenVideos.toArray();
+    _pinnedVideos := pinnedVideos.toArray();
+    _reports := reports.toArray();
   };
 
   func pkey(p : Principal) : Text = p.toText();
@@ -97,6 +118,11 @@ actor {
     "n" # _notifCounter.toText();
   };
 
+  func nextReportId() : Text {
+    _reportCounter += 1;
+    "r" # _reportCounter.toText();
+  };
+
   func hasPrincipal(arr : [Principal], p : Principal) : Bool {
     var found = false;
     for (x in arr.values()) {
@@ -105,11 +131,31 @@ actor {
     found;
   };
 
+  func hasText(arr : [Text], t : Text) : Bool {
+    var found = false;
+    for (x in arr.values()) {
+      if (x == t) { found := true; };
+    };
+    found;
+  };
+
+  func removeText(arr : [Text], t : Text) : [Text] =
+    arr.filter(func(x : Text) : Bool { x != t });
+
   func removePrincipal(arr : [Principal], p : Principal) : [Principal] =
     arr.filter(func(x : Principal) : Bool { not Principal.equal(x, p) });
 
   func compareVideoDesc(a : Video, b : Video) : Order.Order =
     Int.compare(b.createdAt, a.createdAt);
+
+  func compareVideoByViews(a : Video, b : Video) : Order.Order =
+    Nat.compare(b.views, a.views);
+
+  func compareVideoByLikes(a : Video, b : Video) : Order.Order {
+    let la = likes.get(a.id).get([]).size();
+    let lb = likes.get(b.id).get([]).size();
+    Nat.compare(lb, la);
+  };
 
   func compareCommentAsc(a : Comment, b : Comment) : Order.Order =
     Int.compare(a.createdAt, b.createdAt);
@@ -201,6 +247,39 @@ actor {
     sorted.sliceToArray(offset, end);
   };
 
+  public query func getFollowingFeed(p : Principal, offset : Nat, limit : Nat) : async [Video] {
+    let followed = following.get(pkey(p)).get([]);
+    var arr : [Video] = [];
+    for ((_, v) in videos.entries()) {
+      if (hasPrincipal(followed, v.creator)) { arr := arr.concat([v]); };
+    };
+    let sorted = arr.sort(compareVideoDesc);
+    let size = sorted.size();
+    if (offset >= size) return [];
+    let end = Nat.min(offset + limit, size);
+    sorted.sliceToArray(offset, end);
+  };
+
+  public query func getTrendingFeed(offset : Nat, limit : Nat) : async [Video] {
+    var arr : [Video] = [];
+    for ((_, v) in videos.entries()) { arr := arr.concat([v]); };
+    let sorted = arr.sort(compareVideoByViews);
+    let size = sorted.size();
+    if (offset >= size) return [];
+    let end = Nat.min(offset + limit, size);
+    sorted.sliceToArray(offset, end);
+  };
+
+  public query func getPopularFeed(offset : Nat, limit : Nat) : async [Video] {
+    var arr : [Video] = [];
+    for ((_, v) in videos.entries()) { arr := arr.concat([v]); };
+    let sorted = arr.sort(compareVideoByLikes);
+    let size = sorted.size();
+    if (offset >= size) return [];
+    let end = Nat.min(offset + limit, size);
+    sorted.sliceToArray(offset, end);
+  };
+
   public query func getUserVideos(p : Principal) : async [Video] {
     var arr : [Video] = [];
     for ((_, v) in videos.entries()) {
@@ -223,6 +302,17 @@ actor {
     };
   };
 
+  public shared ({ caller }) func updateVideo(id : Text, title : Text, description : Text, hashtags : [Text]) : async Bool {
+    switch (videos.get(id)) {
+      case null false;
+      case (?v) {
+        if (not Principal.equal(v.creator, caller)) return false;
+        videos.add(id, { id = v.id; creator = v.creator; title; description; hashtags; videoKey = v.videoKey; thumbnailKey = v.thumbnailKey; createdAt = v.createdAt; views = v.views });
+        true;
+      };
+    };
+  };
+
   public shared func incrementView(id : Text) : async () {
     switch (videos.get(id)) {
       case null {};
@@ -230,6 +320,83 @@ actor {
         videos.add(id, { id = v.id; creator = v.creator; title = v.title; description = v.description; hashtags = v.hashtags; videoKey = v.videoKey; thumbnailKey = v.thumbnailKey; createdAt = v.createdAt; views = v.views + 1 });
       };
     };
+  };
+
+  // ===== SAVE VIDEOS =====
+  public shared ({ caller }) func saveVideo(videoId : Text) : async () {
+    let key = pkey(caller);
+    let current = savedVideos.get(key).get([]);
+    if (not hasText(current, videoId)) {
+      savedVideos.add(key, current.concat([videoId]));
+    };
+  };
+
+  public shared ({ caller }) func unsaveVideo(videoId : Text) : async () {
+    let key = pkey(caller);
+    let current = savedVideos.get(key).get([]);
+    savedVideos.add(key, removeText(current, videoId));
+  };
+
+  public shared query ({ caller }) func getSavedVideos() : async [Video] {
+    let key = pkey(caller);
+    let ids = savedVideos.get(key).get([]);
+    var arr : [Video] = [];
+    for (id in ids.values()) {
+      switch (videos.get(id)) {
+        case (?v) { arr := arr.concat([v]); };
+        case null {};
+      };
+    };
+    arr;
+  };
+
+  public shared query ({ caller }) func isVideoSaved(videoId : Text) : async Bool {
+    let key = pkey(caller);
+    hasText(savedVideos.get(key).get([]), videoId);
+  };
+
+  // ===== HIDE VIDEOS =====
+  public shared ({ caller }) func hideVideo(videoId : Text) : async () {
+    let key = pkey(caller);
+    let current = hiddenVideos.get(key).get([]);
+    if (not hasText(current, videoId)) {
+      hiddenVideos.add(key, current.concat([videoId]));
+    };
+  };
+
+  public shared ({ caller }) func unhideVideo(videoId : Text) : async () {
+    let key = pkey(caller);
+    let current = hiddenVideos.get(key).get([]);
+    hiddenVideos.add(key, removeText(current, videoId));
+  };
+
+  // ===== PIN VIDEOS =====
+  public shared ({ caller }) func pinVideo(videoId : Text) : async Bool {
+    switch (videos.get(videoId)) {
+      case null false;
+      case (?v) {
+        if (not Principal.equal(v.creator, caller)) return false;
+        pinnedVideos.add(pkey(caller), videoId);
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func unpinVideo() : async () {
+    pinnedVideos.remove(pkey(caller));
+  };
+
+  public query func getPinnedVideo(p : Principal) : async ?Video {
+    switch (pinnedVideos.get(pkey(p))) {
+      case null null;
+      case (?id) videos.get(id);
+    };
+  };
+
+  // ===== REPORT =====
+  public shared ({ caller }) func reportVideo(videoId : Text, reason : Text) : async () {
+    let id = nextReportId();
+    reports.add(id, { id; videoId; reporter = caller; reason; createdAt = Time.now() });
   };
 
   // ===== LIKES =====

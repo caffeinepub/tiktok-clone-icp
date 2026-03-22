@@ -1,11 +1,17 @@
 import {
   Bookmark,
+  Compass,
+  Flame,
   Heart,
   MessageCircle,
+  MoreVertical,
   Music,
   Pause,
   Play,
   Share2,
+  Star,
+  TrendingUp,
+  Users,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -14,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import AuthModal from "../components/AuthModal";
 import CommentsDrawer from "../components/CommentsDrawer";
+import VideoOptionsSheet from "../components/VideoOptionsSheet";
 import { useBackend } from "../hooks/useBackend";
 import {
   SAMPLE_PROFILES,
@@ -30,6 +37,11 @@ interface VideoCardProps {
   onToggleSave: (id: string) => void;
   followedIds: Set<string>;
   onToggleFollow: (id: string) => void;
+  pinnedIds: Set<string>;
+  onPinToggle: (id: string) => void;
+  onRemoveFromFeed: (id: string) => void;
+  onEditSave: (id: string, title: string, desc: string, tags: string[]) => void;
+  currentUserPrincipal: string | null;
 }
 
 function VideoCard({
@@ -40,6 +52,11 @@ function VideoCard({
   onToggleSave,
   followedIds,
   onToggleFollow,
+  pinnedIds,
+  onPinToggle,
+  onRemoveFromFeed,
+  onEditSave,
+  currentUserPrincipal,
 }: VideoCardProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [liked, setLiked] = useState(false);
@@ -52,10 +69,13 @@ function VideoCard({
   const [showHeart, setShowHeart] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const lastTap = useRef(0);
   const { isLoggedIn } = useBackend();
   const isSaved = savedIds.has(video.id);
   const isFollowed = followedIds.has(video.creator);
+  const isPinned = pinnedIds.has(video.id);
+  const isOwner = currentUserPrincipal === video.creator;
 
   const profile = SAMPLE_PROFILES[video.creator] ?? {
     username: video.creator.slice(0, 8),
@@ -131,12 +151,8 @@ function VideoCard({
     const url = `${window.location.origin}?v=${video.id}`;
     navigator.clipboard
       .writeText(url)
-      .then(() => {
-        toast.success("Link copied!");
-      })
-      .catch(() => {
-        toast.error("Could not copy link");
-      });
+      .then(() => toast.success("Link copied!"))
+      .catch(() => toast.error("Could not copy link"));
   };
 
   const handleSave = () => {
@@ -184,6 +200,14 @@ function VideoCard({
           preload="metadata"
         />
 
+        {/* Pinned badge */}
+        {isPinned && (
+          <div className="absolute top-12 left-3 z-20 flex items-center gap-1 bg-yellow-400/90 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+            <Star size={10} className="fill-black" />
+            Pinned
+          </div>
+        )}
+
         {/* Double tap heart animation */}
         <AnimatePresence>
           {showHeart && (
@@ -209,22 +233,43 @@ function VideoCard({
           </div>
         )}
 
-        {/* Top right: mute toggle */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMuted((m) => !m);
-          }}
-          className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/40 flex items-center justify-center"
-          aria-label="Toggle mute"
-        >
-          {muted ? (
-            <VolumeX size={18} className="text-white" />
-          ) : (
-            <Volume2 size={18} className="text-white" />
-          )}
-        </button>
+        {/* Top-right controls: 3-dot menu + mute */}
+        <div className="absolute top-4 right-3 z-20 flex flex-col items-center gap-2">
+          {/* 3-dot options button */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowOptions(true);
+            }}
+            className="w-9 h-9 rounded-full flex items-center justify-center"
+            style={{
+              background: "rgba(0,0,0,0.45)",
+              backdropFilter: "blur(8px)",
+            }}
+            aria-label="More options"
+            data-ocid="video_options.open_modal_button"
+          >
+            <MoreVertical size={18} className="text-white" />
+          </button>
+
+          {/* Mute toggle */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMuted((m) => !m);
+            }}
+            className="w-9 h-9 rounded-full bg-black/40 flex items-center justify-center"
+            aria-label="Toggle mute"
+          >
+            {muted ? (
+              <VolumeX size={18} className="text-white" />
+            ) : (
+              <Volume2 size={18} className="text-white" />
+            )}
+          </button>
+        </div>
 
         {/* Right sidebar actions */}
         <div className="absolute right-3 bottom-28 flex flex-col items-center gap-4 z-10">
@@ -253,7 +298,7 @@ function VideoCard({
                 isFollowed ? "bg-[#22D3EE]" : "bg-[#FF3B5C]"
               }`}
             >
-              {isFollowed ? "✓" : "+"}
+              {isFollowed ? "\u2713" : "+"}
             </button>
           </button>
 
@@ -390,7 +435,7 @@ function VideoCard({
           <div className="flex items-center gap-1 text-white text-xs">
             <Music size={11} />
             <span className="truncate">
-              Original sound – {profile.username}
+              Original sound \u2013 {profile.username}
             </span>
           </div>
         </div>
@@ -442,36 +487,52 @@ function VideoCard({
         videoId={video.id}
       />
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+      <VideoOptionsSheet
+        open={showOptions}
+        onClose={() => setShowOptions(false)}
+        video={video}
+        isOwner={isOwner}
+        isSaved={isSaved}
+        isPinned={isPinned}
+        onViewProfile={onViewProfile}
+        onRemoveFromFeed={onRemoveFromFeed}
+        onSaveToggle={onToggleSave}
+        onEditSave={onEditSave}
+        onPinToggle={onPinToggle}
+      />
     </>
   );
 }
 
-export default function FeedPage({
+interface VideoScrollFeedProps {
+  videos: Video[];
+  onViewProfile: (id: string) => void;
+  savedIds: Set<string>;
+  onToggleSave: (id: string) => void;
+  followedIds: Set<string>;
+  onToggleFollow: (id: string) => void;
+  pinnedIds: Set<string>;
+  onPinToggle: (id: string) => void;
+  onRemoveFromFeed: (id: string) => void;
+  onEditSave: (id: string, title: string, desc: string, tags: string[]) => void;
+  currentUserPrincipal: string | null;
+}
+
+function VideoScrollFeed({
+  videos,
   onViewProfile,
-}: { onViewProfile: (id: string) => void }) {
-  const [videos] = useState<Video[]>(SAMPLE_VIDEOS);
+  savedIds,
+  onToggleSave,
+  followedIds,
+  onToggleFollow,
+  pinnedIds,
+  onPinToggle,
+  onRemoveFromFeed,
+  onEditSave,
+  currentUserPrincipal,
+}: VideoScrollFeedProps) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
-  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const toggleSave = (id: string) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleFollow = (id: string) => {
-    setFollowedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
 
   useEffect(() => {
     const container = containerRef.current;
@@ -490,7 +551,6 @@ export default function FeedPage({
     const children = Array.from(container.querySelectorAll("[data-index]"));
     for (const el of children) observer.observe(el);
     return () => observer.disconnect();
-    // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
   }, []);
 
   return (
@@ -512,12 +572,293 @@ export default function FeedPage({
             isActive={i === activeIndex}
             onViewProfile={onViewProfile}
             savedIds={savedIds}
-            onToggleSave={toggleSave}
+            onToggleSave={onToggleSave}
             followedIds={followedIds}
-            onToggleFollow={toggleFollow}
+            onToggleFollow={onToggleFollow}
+            pinnedIds={pinnedIds}
+            onPinToggle={onPinToggle}
+            onRemoveFromFeed={onRemoveFromFeed}
+            onEditSave={onEditSave}
+            currentUserPrincipal={currentUserPrincipal}
           />
         </div>
       ))}
+    </div>
+  );
+}
+
+type FeedTab = "for-you" | "following" | "trending" | "popular";
+
+const TAB_CONFIG: Array<{
+  id: FeedTab;
+  label: string;
+  icon: React.ReactNode;
+  ocid: string;
+}> = [
+  {
+    id: "for-you",
+    label: "For You",
+    icon: <Star size={13} />,
+    ocid: "feed.for_you.tab",
+  },
+  {
+    id: "following",
+    label: "Following",
+    icon: <Users size={13} />,
+    ocid: "feed.following.tab",
+  },
+  {
+    id: "trending",
+    label: "Trending",
+    icon: <TrendingUp size={13} />,
+    ocid: "feed.trending.tab",
+  },
+  {
+    id: "popular",
+    label: "Popular",
+    icon: <Flame size={13} />,
+    ocid: "feed.popular.tab",
+  },
+];
+
+export default function FeedPage({
+  onViewProfile,
+}: { onViewProfile: (id: string) => void }) {
+  const [allVideos, setAllVideos] = useState<Video[]>(SAMPLE_VIDEOS);
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<FeedTab>("for-you");
+  const [showAuth, setShowAuth] = useState(false);
+  const { isLoggedIn, identity } = useBackend();
+  const currentUserPrincipal = identity?.getPrincipal().toString() ?? null;
+
+  const toggleSave = (id: string) => {
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleFollow = (id: string) => {
+    setFollowedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePin = (id: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      // Only one pin at a time — clear all others
+      next.clear();
+      if (!prev.has(id)) next.add(id);
+      return next;
+    });
+  };
+
+  const removeFromFeed = (id: string) => {
+    setHiddenIds((prev) => new Set([...prev, id]));
+  };
+
+  const handleEditSave = (
+    id: string,
+    title: string,
+    desc: string,
+    tags: string[],
+  ) => {
+    setAllVideos((prev) =>
+      prev.map((v) =>
+        v.id === id ? { ...v, title, description: desc, hashtags: tags } : v,
+      ),
+    );
+  };
+
+  const visibleVideos = allVideos.filter((v) => !hiddenIds.has(v.id));
+
+  const trendingVideos = [...visibleVideos].sort(
+    (a, b) => Number(b.views) - Number(a.views),
+  );
+
+  // Popular = by like count (approximated from views for sample data)
+  const popularVideos = [...visibleVideos].sort(
+    (a, b) => Number(b.views) * 0.05 - Number(a.views) * 0.05,
+  );
+
+  const filteredVideos =
+    activeTab === "following"
+      ? visibleVideos.filter((v) => followedIds.has(v.creator))
+      : activeTab === "trending"
+        ? trendingVideos
+        : activeTab === "popular"
+          ? popularVideos
+          : visibleVideos;
+
+  const showFollowingEmpty =
+    activeTab === "following" && (!isLoggedIn || followedIds.size === 0);
+
+  return (
+    <div className="relative h-full">
+      {/* Tab switcher - overlaid at top center */}
+      <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-3 pb-2 pointer-events-none">
+        <div
+          className="flex items-center gap-0.5 bg-black/25 backdrop-blur-md rounded-full px-1 py-1 pointer-events-auto"
+          style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.4)" }}
+        >
+          {TAB_CONFIG.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className="relative flex items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-all duration-200 rounded-full"
+              data-ocid={tab.ocid}
+              style={{
+                color: activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.5)",
+                background:
+                  activeTab === tab.id
+                    ? "rgba(255,255,255,0.15)"
+                    : "transparent",
+              }}
+            >
+              <span
+                style={{
+                  color:
+                    activeTab === tab.id
+                      ? tab.id === "trending"
+                        ? "#22D3EE"
+                        : tab.id === "popular"
+                          ? "#FF3B5C"
+                          : "#fff"
+                      : "rgba(255,255,255,0.45)",
+                }}
+              >
+                {tab.icon}
+              </span>
+              {tab.label}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute inset-0 rounded-full"
+                  style={{ background: "rgba(255,255,255,0.12)" }}
+                  transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab badge for trending/popular */}
+      <AnimatePresence>
+        {(activeTab === "trending" || activeTab === "popular") && (
+          <motion.div
+            key={activeTab}
+            className="absolute top-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+          >
+            <div
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
+              style={{
+                background:
+                  activeTab === "trending"
+                    ? "rgba(34,211,238,0.15)"
+                    : "rgba(255,59,92,0.15)",
+                border:
+                  activeTab === "trending"
+                    ? "1px solid rgba(34,211,238,0.3)"
+                    : "1px solid rgba(255,59,92,0.3)",
+                color: activeTab === "trending" ? "#22D3EE" : "#FF3B5C",
+              }}
+            >
+              {activeTab === "trending" ? (
+                <TrendingUp size={11} />
+              ) : (
+                <Flame size={11} />
+              )}
+              {activeTab === "trending" ? "Most Viewed" : "Most Liked"}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Empty state for following tab */}
+      <AnimatePresence>
+        {showFollowingEmpty && (
+          <motion.div
+            key="empty-following"
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black gap-4 px-8 text-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            data-ocid="feed.following.empty_state"
+          >
+            {!isLoggedIn ? (
+              <>
+                <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-2">
+                  <Heart size={36} className="text-[#FF3B5C]" />
+                </div>
+                <p className="text-white text-lg font-bold">
+                  Log in to see your feed
+                </p>
+                <p className="text-white/60 text-sm">
+                  Log in to see videos from creators you follow
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAuth(true)}
+                  className="mt-2 px-6 py-2.5 bg-[#FF3B5C] text-white font-bold rounded-full text-sm active:opacity-80"
+                  data-ocid="feed.following.primary_button"
+                >
+                  Log In
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-2">
+                  <Compass size={36} className="text-white/70" />
+                </div>
+                <p className="text-white text-lg font-bold">No videos yet</p>
+                <p className="text-white/60 text-sm">
+                  Follow some creators to see their videos here
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("for-you")}
+                  className="mt-2 px-6 py-2.5 bg-white/10 border border-white/20 text-white font-semibold rounded-full text-sm active:opacity-80"
+                  data-ocid="feed.discover.button"
+                >
+                  Discover Creators
+                </button>
+              </>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Video feed */}
+      <VideoScrollFeed
+        key={activeTab}
+        videos={filteredVideos}
+        onViewProfile={onViewProfile}
+        savedIds={savedIds}
+        onToggleSave={toggleSave}
+        followedIds={followedIds}
+        onToggleFollow={toggleFollow}
+        pinnedIds={pinnedIds}
+        onPinToggle={togglePin}
+        onRemoveFromFeed={removeFromFeed}
+        onEditSave={handleEditSave}
+        currentUserPrincipal={currentUserPrincipal}
+      />
+
+      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
     </div>
   );
 }
