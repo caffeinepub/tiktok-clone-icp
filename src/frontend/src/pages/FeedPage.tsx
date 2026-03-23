@@ -890,7 +890,7 @@ export default function FeedPage({
         {/* Tab switcher */}
         <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-3 pb-2 pointer-events-none">
           <div
-            className="flex items-center gap-0.5 bg-black/25 backdrop-blur-md rounded-full px-1 py-1 pointer-events-auto"
+            className="flex items-center gap-0.5 bg-black/25 backdrop-blur-md rounded-full px-1 py-1 pointer-events-auto overflow-x-auto [&::-webkit-scrollbar]:hidden max-w-[90vw]"
             style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.4)" }}
           >
             {TAB_CONFIG.map((tab) => (

@@ -24,7 +24,8 @@ export default function StoriesBar({
   refreshKey,
 }: Props) {
   const { backend, identity, isLoggedIn } = useBackend();
-  const thumbClient = useStorageClient("thumbnails");
+  const photoClient = useStorageClient("photos");
+  const avatarClient = useStorageClient("thumbnails");
   const [groups, setGroups] = useState<GroupedCreator[]>([]);
   const [_viewedIds, setViewedIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -34,9 +35,10 @@ export default function StoriesBar({
     if (!backend) return;
     const load = async () => {
       try {
-        const [stories, viewed] = await Promise.all([
+        const [stories, viewed, allUsers] = await Promise.all([
           backend.getActiveStories(),
           isLoggedIn ? backend.getViewedStoryIds() : Promise.resolve([]),
+          backend.getAllUsers(),
         ]);
         const viewedSet = new Set(viewed as string[]);
         setViewedIds(viewedSet);
@@ -52,24 +54,51 @@ export default function StoriesBar({
           map.get(cid)!.push(s);
         }
 
+        // Build principal -> profile map
+        const userMap = new Map<string, any>();
+        for (const u of allUsers as any[]) {
+          const pid =
+            typeof u.principal === "object"
+              ? u.principal.toString()
+              : String(u.principal);
+          userMap.set(pid, u);
+        }
+
         const currentPrincipal = identity?.getPrincipal().toString();
         const groupsArr: GroupedCreator[] = [];
 
         for (const [cid, sts] of map.entries()) {
-          if (cid === currentPrincipal) continue; // own story handled separately
+          if (cid === currentPrincipal) continue;
+          const profile = userMap.get(cid);
+          const username = profile?.username ?? `${cid.slice(0, 6)}...`;
+
           let avatarUrl = `https://i.pravatar.cc/100?u=${cid}`;
-          const firstKey = sts[0]?.mediaKey;
-          if (thumbClient && firstKey?.startsWith("sha256:")) {
+          const avatarKey = profile?.avatarKey;
+          if (avatarKey && avatarClient && avatarKey.startsWith("sha256:")) {
             try {
-              avatarUrl = await thumbClient.getDirectURL(firstKey);
+              avatarUrl = await avatarClient.getDirectURL(avatarKey);
             } catch {}
+          } else {
+            // fallback to first story media from photos bucket
+            const firstKey = sts[0]?.mediaKey;
+            if (
+              firstKey?.startsWith("sha256:") &&
+              !sts[0]?.mediaType?.startsWith("video")
+            ) {
+              if (photoClient) {
+                try {
+                  avatarUrl = await photoClient.getDirectURL(firstKey);
+                } catch {}
+              }
+            }
           }
+
           const hasUnviewed = sts.some((s) => !viewedSet.has(s.id));
           groupsArr.push({
             creatorId: cid,
             stories: sts,
             avatarUrl,
-            username: `${cid.slice(0, 6)}...`,
+            username,
             hasUnviewed,
           });
         }
@@ -78,7 +107,7 @@ export default function StoriesBar({
       } catch {}
     };
     load();
-  }, [backend, identity, isLoggedIn, thumbClient, refreshKey]);
+  }, [backend, identity, isLoggedIn, photoClient, avatarClient, refreshKey]);
 
   return (
     <div

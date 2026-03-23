@@ -12,6 +12,7 @@ interface Props {
 export default function StoryCreator({ onClose, onCreated }: Props) {
   const { backend } = useBackend();
   const photoClient = useStorageClient("photos");
+  const videoStorageClient = useStorageClient("videos");
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -27,11 +28,14 @@ export default function StoryCreator({ onClose, onCreated }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!file || !backend || !photoClient) return;
+    if (!file || !backend) return;
+    const isVideo = file.type.startsWith("video");
+    const client = isVideo ? videoStorageClient : photoClient;
+    if (!client) return;
     setUploading(true);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { hash: key } = await photoClient.putFile(bytes);
+      const { hash: key } = await client.putFile(bytes);
       await backend.createStory(key, file.type, caption);
       onCreated();
       onClose();

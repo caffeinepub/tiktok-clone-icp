@@ -16,10 +16,12 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import type { Story } from "../backend.d";
 import AuthModal from "../components/AuthModal";
 import FollowListModal from "../components/FollowListModal";
 import ProfileVideoPlayer from "../components/ProfileVideoPlayer";
 import type { ProfileResolvedVideo } from "../components/ProfileVideoPlayer";
+import StoryViewer from "../components/StoryViewer";
 import { useBackend } from "../hooks/useBackend";
 import { useStorageClient } from "../hooks/useStorageClient";
 import { formatCount } from "../types/app";
@@ -147,7 +149,6 @@ function EditProfileSheet({
   const [pronouns, setPronouns] = useState(extras.pronouns);
   const [website, setWebsite] = useState(extras.website);
 
-  // Reset when profile changes
   useEffect(() => {
     const e = parseBioExtras(profile.bio);
     setUsername(profile.username);
@@ -201,7 +202,6 @@ function EditProfileSheet({
               </button>
             </div>
 
-            {/* Avatar change inside edit */}
             <div className="flex justify-center mb-5">
               <button
                 type="button"
@@ -311,7 +311,6 @@ function EditProfileSheet({
   );
 }
 
-// Avatar action sheet
 function AvatarActionSheet({
   open,
   onClose,
@@ -410,7 +409,7 @@ export default function ProfilePage({
   const { isLoggedIn, identity, backend, login } = useBackend();
   const thumbStorageClient = useStorageClient("thumbnails");
   const videoStorageClient = useStorageClient("videos");
-  const imageStorageClient = useStorageClient("images");
+  const imageStorageClient = useStorageClient("photos");
   const [showAuth, setShowAuth] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -443,6 +442,9 @@ export default function ProfilePage({
   );
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
+  const [myStories, setMyStories] = useState<Story[]>([]);
+  const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+  const [_storyViewerIndex, setStoryViewerIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selectedVideoIndex, setSelectedVideoIndex] = useState<number | null>(
     null,
@@ -453,7 +455,6 @@ export default function ProfilePage({
   const coverFileRef = useRef<HTMLInputElement>(null);
   const avatarCameraRef = useRef<HTMLInputElement>(null);
 
-  // Load cover from localStorage per principal
   useEffect(() => {
     if (!identity) return;
     const key = `cover:${identity.getPrincipal().toString()}`;
@@ -476,6 +477,7 @@ export default function ProfilePage({
       backend.getFollowers(myPrincipal),
       backend.getFollowing(myPrincipal),
       backend.getPinnedVideo(myPrincipal).catch(() => null),
+      backend.getStoriesByUser(myPrincipal).catch(() => []),
     ])
       .then(
         async ([
@@ -485,6 +487,7 @@ export default function ProfilePage({
           followers,
           following,
           pinnedOpt,
+          userStories,
         ]) => {
           if ((profileOpt as any).__kind__ === "Some") {
             const p = (profileOpt as any).value;
@@ -531,7 +534,8 @@ export default function ProfilePage({
           setFollowerPrincipals(followers as Principal[]);
           setFollowingPrincipals(following as Principal[]);
 
-          // Pinned video
+          setMyStories((userStories as Story[]) || []);
+
           if (pinnedOpt && (pinnedOpt as any).__kind__ === "Some") {
             const pv = (pinnedOpt as any).value;
             const resolvedPin = await resolveVideos(
@@ -722,6 +726,7 @@ export default function ProfilePage({
     );
   }
 
+  // Horizontal scroll row for videos (9:16 cards)
   const VideoGrid = ({
     items,
     emptyMsg,
@@ -733,14 +738,15 @@ export default function ProfilePage({
         <p className="text-[#8B95A3]">{emptyMsg}</p>
       </div>
     ) : (
-      <div className="grid grid-cols-3 gap-1">
+      <div className="flex flex-row gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
         {items.map((v, i) => (
           <motion.div
             key={v.id}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.05 }}
-            className="relative aspect-[9/16] rounded-lg overflow-hidden bg-[#1A1F26] cursor-pointer group"
+            transition={{ delay: i * 0.04 }}
+            className="relative flex-shrink-0 rounded-xl overflow-hidden bg-[#1A1F26] cursor-pointer group"
+            style={{ width: 140, aspectRatio: "9/16" }}
             onClick={() => openPlayer(items, i)}
             data-ocid={`profile.${activeTab}.item.${i + 1}`}
           >
@@ -758,7 +764,7 @@ export default function ProfilePage({
                 <Play size={20} className="text-white fill-white" />
               </div>
             </div>
-            <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
+            <div className="absolute bottom-1.5 left-1.5 flex items-center gap-0.5">
               <Play size={9} className="text-white fill-white" />
               <span className="text-white text-[9px] font-bold">
                 {formatCount(v.views)}
@@ -769,6 +775,7 @@ export default function ProfilePage({
       </div>
     );
 
+  // Horizontal scroll row for photos (square cards)
   const PhotoGrid = ({ items }: { items: PhotoItem[] }) =>
     items.length === 0 ? (
       <div className="text-center py-16">
@@ -776,14 +783,15 @@ export default function ProfilePage({
         <p className="text-[#8B95A3]">No photos yet. Start sharing!</p>
       </div>
     ) : (
-      <div className="grid grid-cols-3 gap-1">
+      <div className="flex flex-row gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
         {items.map((p, i) => (
           <motion.div
             key={p.id}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: i * 0.05 }}
-            className="relative aspect-square rounded-lg overflow-hidden bg-[#1A1F26] cursor-pointer"
+            transition={{ delay: i * 0.04 }}
+            className="relative flex-shrink-0 rounded-xl overflow-hidden bg-[#1A1F26] cursor-pointer"
+            style={{ width: 140, height: 140 }}
             onClick={() => onViewPost?.(p.id)}
             data-ocid={`profile.photos.item.${i + 1}`}
           >
@@ -815,7 +823,6 @@ export default function ProfilePage({
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-[#22D3EE]/10 via-[#FF3B5C]/10 to-[#0F1216]" />
         )}
-        {/* Cover upload button */}
         <button
           type="button"
           onClick={() => coverFileRef.current?.click()}
@@ -846,7 +853,6 @@ export default function ProfilePage({
       {/* Header area */}
       <div className="px-4 pt-0 pb-3 -mt-10 relative">
         <div className="flex items-end justify-between mb-3">
-          {/* Avatar */}
           <button
             type="button"
             onClick={() => setShowAvatarSheet(true)}
@@ -952,38 +958,86 @@ export default function ProfilePage({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-[#2A3038] px-2">
-        {(
-          [
-            { id: "videos", icon: <Grid3x3 size={15} />, label: "Videos" },
-            { id: "photos", icon: <Image size={15} />, label: "Photos" },
-            { id: "saved", icon: <Bookmark size={15} />, label: "Saved" },
-            { id: "liked", icon: <Heart size={15} />, label: "Liked" },
-            { id: "duets", icon: <GitMerge size={15} />, label: "Duets" },
-          ] as const
-        ).map(({ id, icon, label }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-colors ${
-              activeTab === id
-                ? "border-[#22D3EE] text-[#22D3EE]"
-                : "border-transparent text-[#8B95A3]"
-            }`}
-            data-ocid={`profile.${id}.tab`}
-          >
-            {icon} {label}
-          </button>
-        ))}
+      {/* Highlights / Stories Row */}
+      {myStories.length > 0 && (
+        <div className="px-4 py-3 border-b border-[#2A3038]">
+          <div className="flex gap-3 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            {myStories.map((story, i) => (
+              <button
+                key={story.id}
+                type="button"
+                onClick={() => {
+                  setStoryViewerIndex(i);
+                  setStoryViewerOpen(true);
+                }}
+                className="flex flex-col items-center gap-1 shrink-0"
+                data-ocid={
+                  i === 0
+                    ? "profile.highlights.item.1"
+                    : i === 1
+                      ? "profile.highlights.item.2"
+                      : "profile.highlights.item.3"
+                }
+              >
+                <div
+                  className="w-16 h-16 rounded-full p-[2px]"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #f093fb, #f5576c, #fda085)",
+                  }}
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden bg-[#2A3038] flex items-center justify-center">
+                    {story.mediaType?.startsWith("video") ? (
+                      <div className="w-full h-full bg-gradient-to-br from-[#22D3EE]/30 to-[#FF3B5C]/30 flex items-center justify-center">
+                        <Play size={16} className="text-white fill-white" />
+                      </div>
+                    ) : (
+                      <StoryThumb mediaKey={story.mediaKey} />
+                    )}
+                  </div>
+                </div>
+                <span className="text-[10px] text-[#8B95A3] w-16 text-center truncate">
+                  {story.caption || "Story"}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Tabs - horizontal scroll with hidden scrollbar */}
+      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden border-b border-[#2A3038]">
+        <div className="flex px-2 min-w-max">
+          {(
+            [
+              { id: "videos", icon: <Grid3x3 size={15} />, label: "Videos" },
+              { id: "photos", icon: <Image size={15} />, label: "Photos" },
+              { id: "saved", icon: <Bookmark size={15} />, label: "Saved" },
+              { id: "liked", icon: <Heart size={15} />, label: "Liked" },
+              { id: "duets", icon: <GitMerge size={15} />, label: "Duets" },
+            ] as const
+          ).map(({ id, icon, label }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-1.5 py-3 px-3 text-xs font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                activeTab === id
+                  ? "border-[#22D3EE] text-[#22D3EE]"
+                  : "border-transparent text-[#8B95A3]"
+              }`}
+              data-ocid={`profile.${id}.tab`}
+            >
+              {icon} {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Content grid */}
+      {/* Content */}
       <div className="px-3 pt-3 pb-6">
         {activeTab === "videos" && (
           <>
-            {/* Pinned video card */}
             {pinnedVideo && (
               <div className="mb-4">
                 <div className="flex items-center gap-1.5 mb-2">
@@ -1096,14 +1150,15 @@ export default function ProfilePage({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-0.5">
+            <div className="flex flex-row gap-3 overflow-x-auto pb-2 [&::-webkit-scrollbar]:hidden">
               {duets.map((item, i) => (
                 <motion.div
                   key={item.id}
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="aspect-[9/16] relative overflow-hidden bg-[#1A1F26] cursor-pointer"
+                  transition={{ delay: i * 0.04 }}
+                  className="relative flex-shrink-0 rounded-xl overflow-hidden bg-[#1A1F26] cursor-pointer"
+                  style={{ width: 140, aspectRatio: "9/16" }}
                   onClick={() => openPlayer(duets, i)}
                   data-ocid={`profile.duets.item.${i + 1}`}
                 >
@@ -1136,7 +1191,6 @@ export default function ProfilePage({
         onGallery={() => avatarFileRef.current?.click()}
       />
 
-      {/* Hidden file inputs for avatar */}
       <input
         ref={avatarFileRef}
         type="file"
@@ -1161,7 +1215,6 @@ export default function ProfilePage({
         }}
       />
 
-      {/* Enhanced edit profile sheet */}
       <EditProfileSheet
         open={showEdit}
         profile={profile}
@@ -1222,6 +1275,39 @@ export default function ProfilePage({
           />
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {storyViewerOpen && myStories.length > 0 && identity && (
+          <StoryViewer
+            stories={myStories}
+            creatorId={identity.getPrincipal().toString()}
+            onClose={() => setStoryViewerOpen(false)}
+            onDeleted={() => {
+              setMyStories([]);
+              setStoryViewerOpen(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+// Helper component to render story thumbnail from photos bucket
+function StoryThumb({ mediaKey }: { mediaKey: string }) {
+  const photoClient = useStorageClient("photos");
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!mediaKey?.startsWith("sha256:") || !photoClient) return;
+    photoClient
+      .getDirectURL(mediaKey)
+      .then(setUrl)
+      .catch(() => {});
+  }, [mediaKey, photoClient]);
+
+  if (!url) {
+    return <div className="w-full h-full bg-[#2A3038]" />;
+  }
+  return <img src={url} alt="" className="w-full h-full object-cover" />;
 }
