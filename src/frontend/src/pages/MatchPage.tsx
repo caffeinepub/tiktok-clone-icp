@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useBackend } from "../hooks/useBackend";
 import { useStorageClient } from "../hooks/useStorageClient";
+import UserProfilePage from "./UserProfilePage";
 
 function formatCount(n: bigint | number): string {
   const num = typeof n === "bigint" ? Number(n) : n;
@@ -281,6 +282,8 @@ export default function MatchPage({
   const [matchOverlay, setMatchOverlay] = useState<MatchUser | null>(null);
   const [profileModalMatch, setProfileModalMatch] =
     useState<MatchRecord | null>(null);
+  const [viewingMatchProfile, setViewingMatchProfile] =
+    useState<MatchRecord | null>(null);
   const myAvatarRef = useRef("");
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: storage client is stable
@@ -532,7 +535,7 @@ export default function MatchPage({
               <button
                 key={m.principal}
                 type="button"
-                onClick={() => setProfileModalMatch(m)}
+                onClick={() => setViewingMatchProfile(m)}
                 className="flex flex-col items-center gap-1 shrink-0"
                 data-ocid="match.match.button"
               >
@@ -683,6 +686,26 @@ export default function MatchPage({
           }}
           onClose={() => setProfileModalMatch(null)}
         />
+      )}
+
+      {/* Full UserProfile overlay from match list */}
+      {viewingMatchProfile && (
+        <motion.div
+          className="fixed inset-0 z-[55] bg-[#0F1216]"
+          initial={{ x: "100%" }}
+          animate={{ x: 0 }}
+          exit={{ x: "100%" }}
+          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        >
+          <UserProfilePage
+            creatorId={viewingMatchProfile.principal}
+            onBack={() => setViewingMatchProfile(null)}
+            onOpenChat={(principal, username, avatarUrl) => {
+              setViewingMatchProfile(null);
+              onOpenChat(principal, username, avatarUrl);
+            }}
+          />
+        </motion.div>
       )}
     </div>
   );

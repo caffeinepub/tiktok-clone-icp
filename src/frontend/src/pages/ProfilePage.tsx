@@ -1,17 +1,22 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import {
   Bookmark,
+  Camera,
   GitMerge,
+  Globe,
   Grid3x3,
   Heart,
   Image,
+  Loader2,
+  Pin,
   Play,
   Settings,
+  User,
+  X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AuthModal from "../components/AuthModal";
-import EditProfileModal from "../components/EditProfileModal";
 import FollowListModal from "../components/FollowListModal";
 import ProfileVideoPlayer from "../components/ProfileVideoPlayer";
 import type { ProfileResolvedVideo } from "../components/ProfileVideoPlayer";
@@ -97,6 +102,304 @@ async function resolveVideos(
   );
 }
 
+// Parse pronouns/website from bio string
+function parseBioExtras(bio: string) {
+  let pronouns = "";
+  let website = "";
+  let cleanBio = bio;
+  const pronounsMatch = bio.match(/\s*\|\s*pronouns:([^|]+)/);
+  if (pronounsMatch) {
+    pronouns = pronounsMatch[1].trim();
+    cleanBio = cleanBio.replace(pronounsMatch[0], "");
+  }
+  const websiteMatch = cleanBio.match(/\s*\|\s*website:([^|]+)/);
+  if (websiteMatch) {
+    website = websiteMatch[1].trim();
+    cleanBio = cleanBio.replace(websiteMatch[0], "");
+  }
+  return { pronouns, website, cleanBio: cleanBio.trim() };
+}
+
+function buildBioString(bio: string, pronouns: string, website: string) {
+  let result = bio.trim();
+  if (pronouns.trim()) result += ` | pronouns:${pronouns.trim()}`;
+  if (website.trim()) result += ` | website:${website.trim()}`;
+  return result;
+}
+
+// Enhanced edit profile sheet
+function EditProfileSheet({
+  open,
+  profile,
+  onClose,
+  onSave,
+  onChangeAvatar,
+}: {
+  open: boolean;
+  profile: ProfileData;
+  onClose: () => void;
+  onSave: (p: { username: string; bio: string }) => void;
+  onChangeAvatar: () => void;
+}) {
+  const extras = parseBioExtras(profile.bio);
+  const [username, setUsername] = useState(profile.username);
+  const [bio, setBio] = useState(extras.cleanBio);
+  const [pronouns, setPronouns] = useState(extras.pronouns);
+  const [website, setWebsite] = useState(extras.website);
+
+  // Reset when profile changes
+  useEffect(() => {
+    const e = parseBioExtras(profile.bio);
+    setUsername(profile.username);
+    setBio(e.cleanBio);
+    setPronouns(e.pronouns);
+    setWebsite(e.website);
+  }, [profile]);
+
+  const handleSave = () => {
+    const fullBio = buildBioString(bio, pronouns, website);
+    onSave({ username, bio: fullBio });
+  };
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-end"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          data-ocid="edit_profile.modal"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/70 w-full"
+            onClick={onClose}
+            aria-label="Close"
+          />
+          <motion.div
+            className="relative w-full rounded-t-3xl bg-[#151920] px-5 pt-4 pb-10 z-10 max-h-[90vh] overflow-y-auto"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 220 }}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-[#E9EEF5] font-black text-lg">
+                Edit Profile
+              </h2>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
+                data-ocid="edit_profile.close_button"
+              >
+                <X size={16} className="text-[#8B95A3]" />
+              </button>
+            </div>
+
+            {/* Avatar change inside edit */}
+            <div className="flex justify-center mb-5">
+              <button
+                type="button"
+                onClick={onChangeAvatar}
+                className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[#22D3EE] group"
+                data-ocid="edit_profile.avatar.button"
+              >
+                {profile.avatar ? (
+                  <img
+                    src={profile.avatar}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-[#1A1F26] flex items-center justify-center">
+                    <User size={28} className="text-[#22D3EE]" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+                  <Camera size={20} className="text-white" />
+                </div>
+              </button>
+            </div>
+            <p className="text-center text-xs text-[#8B95A3] -mt-3 mb-5">
+              Tap to change photo
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <div>
+                <label
+                  htmlFor="ep-username"
+                  className="text-xs text-[#A6B0BC] mb-1.5 block font-semibold"
+                >
+                  Username
+                </label>
+                <input
+                  id="ep-username"
+                  className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] transition-colors"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  data-ocid="edit_profile.username.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="ep-bio"
+                  className="text-xs text-[#A6B0BC] mb-1.5 block font-semibold"
+                >
+                  Bio
+                </label>
+                <textarea
+                  id="ep-bio"
+                  rows={3}
+                  className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] transition-colors resize-none"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  data-ocid="edit_profile.bio.textarea"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="ep-pronouns"
+                  className="text-xs text-[#A6B0BC] mb-1.5 block font-semibold"
+                >
+                  Pronouns
+                </label>
+                <input
+                  id="ep-pronouns"
+                  placeholder="e.g. they/them, she/her"
+                  className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] transition-colors placeholder:text-[#4A5568]"
+                  value={pronouns}
+                  onChange={(e) => setPronouns(e.target.value)}
+                  data-ocid="edit_profile.pronouns.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="ep-website"
+                  className="text-xs text-[#A6B0BC] mb-1.5 block font-semibold"
+                >
+                  Website
+                </label>
+                <input
+                  id="ep-website"
+                  placeholder="https://yoursite.com"
+                  type="url"
+                  className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-4 py-3 text-sm text-[#E9EEF5] outline-none focus:border-[#22D3EE] transition-colors placeholder:text-[#4A5568]"
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  data-ocid="edit_profile.website.input"
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#22D3EE] to-[#0EA5E9] text-black font-black text-base"
+              data-ocid="edit_profile.save.submit_button"
+            >
+              Save Changes
+            </button>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Avatar action sheet
+function AvatarActionSheet({
+  open,
+  onClose,
+  onCamera,
+  onGallery,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCamera: () => void;
+  onGallery: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-[60] flex items-end"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/70 w-full"
+            onClick={onClose}
+            aria-label="Close"
+          />
+          <motion.div
+            className="relative w-full rounded-t-3xl bg-[#151920] px-5 pt-4 pb-10 z-10"
+            initial={{ y: "100%" }}
+            animate={{ y: 0 }}
+            exit={{ y: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 220 }}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            <h3 className="text-[#E9EEF5] font-black text-base mb-4">
+              Change Profile Photo
+            </h3>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onCamera();
+                  onClose();
+                }}
+                className="flex items-center gap-4 p-4 rounded-2xl bg-[#1A1F26] border border-[#2A3038]"
+                data-ocid="avatar.camera.button"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#22D3EE]/20 flex items-center justify-center">
+                  <Camera size={20} className="text-[#22D3EE]" />
+                </div>
+                <span className="text-[#E9EEF5] font-semibold text-sm">
+                  Take Photo
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onGallery();
+                  onClose();
+                }}
+                className="flex items-center gap-4 p-4 rounded-2xl bg-[#1A1F26] border border-[#2A3038]"
+                data-ocid="avatar.gallery.button"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#FF3B5C]/20 flex items-center justify-center">
+                  <Image size={20} className="text-[#FF3B5C]" />
+                </div>
+                <span className="text-[#E9EEF5] font-semibold text-sm">
+                  Choose from Gallery
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-1 p-3 rounded-2xl text-[#8B95A3] text-sm font-semibold"
+                data-ocid="avatar.cancel.button"
+              >
+                Cancel
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function ProfilePage({
   onViewProfile: _onViewProfile,
   onViewPost,
@@ -111,16 +414,21 @@ export default function ProfilePage({
   const [showAuth, setShowAuth] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showAvatarSheet, setShowAvatarSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("videos");
   const [profile, setProfile] = useState<ProfileData>({
     username: "Loading...",
     bio: "",
     avatar: "",
   });
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false);
   const [myVideos, setMyVideos] = useState<VideoItem[]>([]);
   const [myPhotos, setMyPhotos] = useState<PhotoItem[]>([]);
   const [savedVideos, setSavedVideos] = useState<VideoItem[]>([]);
   const [likedVideos, setLikedVideos] = useState<VideoItem[]>([]);
+  const [pinnedVideo, setPinnedVideo] = useState<VideoItem | null>(null);
   const [savedLoaded, setSavedLoaded] = useState(false);
   const [likedLoaded, setLikedLoaded] = useState(false);
   const [duets, setDuets] = useState<VideoItem[]>([]);
@@ -141,6 +449,18 @@ export default function ProfilePage({
   );
   const [playerSource, setPlayerSource] = useState<ProfileResolvedVideo[]>([]);
 
+  const avatarFileRef = useRef<HTMLInputElement>(null);
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const avatarCameraRef = useRef<HTMLInputElement>(null);
+
+  // Load cover from localStorage per principal
+  useEffect(() => {
+    if (!identity) return;
+    const key = `cover:${identity.getPrincipal().toString()}`;
+    const stored = localStorage.getItem(key);
+    if (stored) setCoverUrl(stored);
+  }, [identity]);
+
   useEffect(() => {
     if (!isLoggedIn || !identity || !backend) {
       setLoading(false);
@@ -155,53 +475,74 @@ export default function ProfilePage({
       backend.getUserStats(myPrincipal),
       backend.getFollowers(myPrincipal),
       backend.getFollowing(myPrincipal),
+      backend.getPinnedVideo(myPrincipal).catch(() => null),
     ])
-      .then(async ([profileOpt, videos, stats, followers, following]) => {
-        if ((profileOpt as any).__kind__ === "Some") {
-          const p = (profileOpt as any).value;
-          let avatar =
-            p.avatarKey ||
-            `https://i.pravatar.cc/100?u=${myPrincipal.toString()}`;
-          if (thumbStorageClient && p.avatarKey?.startsWith("sha256:")) {
-            try {
-              avatar = await thumbStorageClient.getDirectURL(p.avatarKey);
-            } catch {}
+      .then(
+        async ([
+          profileOpt,
+          videos,
+          stats,
+          followers,
+          following,
+          pinnedOpt,
+        ]) => {
+          if ((profileOpt as any).__kind__ === "Some") {
+            const p = (profileOpt as any).value;
+            let avatar =
+              p.avatarKey ||
+              `https://i.pravatar.cc/100?u=${myPrincipal.toString()}`;
+            if (thumbStorageClient && p.avatarKey?.startsWith("sha256:")) {
+              try {
+                avatar = await thumbStorageClient.getDirectURL(p.avatarKey);
+              } catch {}
+            }
+            setProfile({
+              username: p.username,
+              bio: p.bio,
+              avatar,
+              avatarKey: p.avatarKey,
+            });
+          } else {
+            setProfile({
+              username: `${myPrincipal.toString().slice(0, 8)}...`,
+              bio: "VibeFlow creator",
+              avatar: `https://i.pravatar.cc/100?u=${myPrincipal.toString()}`,
+            });
           }
-          setProfile({
-            username: p.username,
-            bio: p.bio,
-            avatar,
-            avatarKey: p.avatarKey,
-          });
-        } else {
-          setProfile({
-            username: `${myPrincipal.toString().slice(0, 8)}...`,
-            bio: "VibeFlow creator",
-            avatar: `https://i.pravatar.cc/100?u=${myPrincipal.toString()}`,
-          });
-        }
-        const resolved = await resolveVideos(
-          videos as any[],
-          thumbStorageClient,
-          videoStorageClient,
-        );
-        setMyVideos(resolved);
-        setFollowerCount((stats as any).followerCount);
-        setFollowingCount((stats as any).followingCount);
-        const likeCounts = await Promise.all(
-          (videos as any[])
-            .slice(0, 10)
-            .map((v: any) => backend.getLikeCount(v.id).catch(() => 0n)),
-        );
-        setTotalLikes(
-          likeCounts.reduce(
-            (a: bigint, b: bigint | number) => a + BigInt(b),
-            0n,
-          ),
-        );
-        setFollowerPrincipals(followers as Principal[]);
-        setFollowingPrincipals(following as Principal[]);
-      })
+          const resolved = await resolveVideos(
+            videos as any[],
+            thumbStorageClient,
+            videoStorageClient,
+          );
+          setMyVideos(resolved);
+          setFollowerCount((stats as any).followerCount);
+          setFollowingCount((stats as any).followingCount);
+          const likeCounts = await Promise.all(
+            (videos as any[])
+              .slice(0, 10)
+              .map((v: any) => backend.getLikeCount(v.id).catch(() => 0n)),
+          );
+          setTotalLikes(
+            likeCounts.reduce(
+              (a: bigint, b: bigint | number) => a + BigInt(b),
+              0n,
+            ),
+          );
+          setFollowerPrincipals(followers as Principal[]);
+          setFollowingPrincipals(following as Principal[]);
+
+          // Pinned video
+          if (pinnedOpt && (pinnedOpt as any).__kind__ === "Some") {
+            const pv = (pinnedOpt as any).value;
+            const resolvedPin = await resolveVideos(
+              [pv],
+              thumbStorageClient,
+              videoStorageClient,
+            );
+            setPinnedVideo(resolvedPin[0] || null);
+          }
+        },
+      )
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [isLoggedIn, identity, backend, thumbStorageClient, videoStorageClient]);
@@ -271,6 +612,7 @@ export default function ProfilePage({
       })
       .catch(() => {});
   }, [activeTab, likedLoaded, backend, thumbStorageClient, videoStorageClient]);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: storage clients stable
   useEffect(() => {
     if (activeTab !== "duets" || duetsLoaded || !backend || !identity) return;
@@ -289,7 +631,38 @@ export default function ProfilePage({
       .catch(() => setDuetsLoaded(true));
   }, [activeTab, duetsLoaded, backend, identity]);
 
+  const uploadAvatar = async (file: File) => {
+    if (!backend || !thumbStorageClient || !identity) return;
+    setAvatarUploading(true);
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { hash: avatarKey } = await thumbStorageClient.putFile(bytes);
+      const avatarUrl = await thumbStorageClient.getDirectURL(avatarKey);
+      await backend.updateProfile(profile.username, profile.bio, avatarKey);
+      setProfile((prev) => ({ ...prev, avatar: avatarUrl, avatarKey }));
+    } catch {}
+    setAvatarUploading(false);
+  };
+
+  const uploadCover = async (file: File) => {
+    if (!identity) return;
+    setCoverUploading(true);
+    try {
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const key = `cover:${identity.getPrincipal().toString()}`;
+      localStorage.setItem(key, dataUrl);
+      setCoverUrl(dataUrl);
+    } catch {}
+    setCoverUploading(false);
+  };
+
   const initials = profile.username.slice(0, 2).toUpperCase();
+  const extras = parseBioExtras(profile.bio);
 
   const toPlayerVideos = (items: VideoItem[]): ProfileResolvedVideo[] =>
     items.map((v) => ({
@@ -435,24 +808,72 @@ export default function ProfilePage({
       className="h-full overflow-y-auto bg-[#0F1216]"
       data-ocid="profile.page"
     >
+      {/* Cover Photo */}
+      <div className="relative w-full h-44 bg-gradient-to-br from-[#1A1F26] to-[#0F1216] overflow-hidden">
+        {coverUrl ? (
+          <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-[#22D3EE]/10 via-[#FF3B5C]/10 to-[#0F1216]" />
+        )}
+        {/* Cover upload button */}
+        <button
+          type="button"
+          onClick={() => coverFileRef.current?.click()}
+          className="absolute bottom-2 right-2 flex items-center gap-1.5 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-white font-semibold"
+          disabled={coverUploading}
+          data-ocid="profile.cover.upload_button"
+        >
+          {coverUploading ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Camera size={12} />
+          )}
+          {coverUploading ? "Uploading..." : "Edit Cover"}
+        </button>
+        <input
+          ref={coverFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) uploadCover(f);
+            e.target.value = "";
+          }}
+        />
+      </div>
+
       {/* Header area */}
-      <div className="px-4 pt-5 pb-3">
-        <div className="flex items-start justify-between mb-4">
-          <div className="relative">
-            <div className="w-20 h-20 rounded-full border-2 border-[#22D3EE] overflow-hidden bg-[#1A1F26] flex items-center justify-center">
-              {profile.avatar ? (
-                <img
-                  src={profile.avatar}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-2xl font-bold text-[#22D3EE]">
-                  {initials}
-                </span>
-              )}
+      <div className="px-4 pt-0 pb-3 -mt-10 relative">
+        <div className="flex items-end justify-between mb-3">
+          {/* Avatar */}
+          <button
+            type="button"
+            onClick={() => setShowAvatarSheet(true)}
+            className="relative w-20 h-20 rounded-full border-[3px] border-[#0F1216] overflow-hidden bg-[#1A1F26] flex items-center justify-center group"
+            disabled={avatarUploading}
+            data-ocid="profile.avatar.button"
+          >
+            {avatarUploading ? (
+              <div className="w-full h-full flex items-center justify-center bg-black/60">
+                <Loader2 size={20} className="text-[#22D3EE] animate-spin" />
+              </div>
+            ) : profile.avatar ? (
+              <img
+                src={profile.avatar}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="text-2xl font-bold text-[#22D3EE]">
+                {initials}
+              </span>
+            )}
+            <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity">
+              <Camera size={18} className="text-white" />
             </div>
-          </div>
+          </button>
+
           <div className="flex gap-2">
             <button
               type="button"
@@ -474,9 +895,23 @@ export default function ProfilePage({
         </div>
 
         <h2 className="font-bold text-xl">@{profile.username}</h2>
-        <p className="text-[#A6B0BC] text-sm mb-4">{profile.bio}</p>
+        <p className="text-[#A6B0BC] text-sm mt-0.5">{extras.cleanBio}</p>
+        {extras.pronouns && (
+          <p className="text-[#8B95A3] text-xs mt-1">{extras.pronouns}</p>
+        )}
+        {extras.website && (
+          <a
+            href={extras.website}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[#22D3EE] text-xs mt-1"
+          >
+            <Globe size={11} />
+            {extras.website.replace(/^https?:\/\//, "")}
+          </a>
+        )}
 
-        <div className="flex gap-0 mb-4">
+        <div className="flex gap-0 mt-4 mb-4">
           {[
             { label: "Videos", value: myVideos.length, onClick: undefined },
             {
@@ -499,7 +934,11 @@ export default function ProfilePage({
               key={stat.label}
               type="button"
               onClick={stat.onClick}
-              className={`flex-1 text-center ${stat.onClick ? "cursor-pointer active:opacity-70" : "cursor-default"}`}
+              className={`flex-1 text-center ${
+                stat.onClick
+                  ? "cursor-pointer active:opacity-70"
+                  : "cursor-default"
+              }`}
               data-ocid={
                 stat.onClick
                   ? `profile.${stat.label.toLowerCase()}.button`
@@ -543,11 +982,59 @@ export default function ProfilePage({
       {/* Content grid */}
       <div className="px-3 pt-3 pb-6">
         {activeTab === "videos" && (
-          <VideoGrid
-            items={myVideos}
-            emptyMsg="No videos yet. Start creating!"
-            emptyIcon={<Grid3x3 size={40} className="text-[#2A3038]" />}
-          />
+          <>
+            {/* Pinned video card */}
+            {pinnedVideo && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Pin size={12} className="text-[#22D3EE]" />
+                  <span className="text-xs text-[#22D3EE] font-semibold uppercase tracking-widest">
+                    Pinned
+                  </span>
+                </div>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="relative rounded-2xl overflow-hidden bg-[#1A1F26] cursor-pointer group"
+                  style={{ aspectRatio: "16/9" }}
+                  onClick={() => openPlayer([pinnedVideo], 0)}
+                  data-ocid="profile.pinned.button"
+                >
+                  {pinnedVideo.thumbUrl ? (
+                    <img
+                      src={pinnedVideo.thumbUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#2A3038]" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3">
+                    <p className="text-white font-bold text-sm line-clamp-1">
+                      {pinnedVideo.title}
+                    </p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Play size={10} className="text-white fill-white" />
+                      <span className="text-white text-[10px]">
+                        {formatCount(pinnedVideo.views)} views
+                      </span>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 right-2">
+                    <div className="bg-black/60 rounded-full p-1.5">
+                      <Play size={14} className="text-white fill-white" />
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+            <VideoGrid
+              items={myVideos}
+              emptyMsg="No videos yet. Start creating!"
+              emptyIcon={<Grid3x3 size={40} className="text-[#2A3038]" />}
+            />
+          </>
         )}
         {activeTab === "photos" &&
           (!photosLoaded ? (
@@ -590,58 +1077,99 @@ export default function ProfilePage({
               emptyIcon={<Heart size={40} className="text-[#2A3038]" />}
             />
           ))}
+        {activeTab === "duets" &&
+          (!duetsLoaded ? (
+            <div
+              className="flex justify-center py-16"
+              data-ocid="profile.duets.loading_state"
+            >
+              <div className="w-7 h-7 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
+            </div>
+          ) : duets.length === 0 ? (
+            <div
+              className="flex flex-col items-center justify-center py-16 gap-3"
+              data-ocid="profile.duets.empty_state"
+            >
+              <GitMerge size={40} className="text-[#2A3038]" />
+              <p className="text-[#8B95A3] text-sm text-center">
+                No duets yet. Tap Duet on any video to collaborate!
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-0.5">
+              {duets.map((item, i) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.05 }}
+                  className="aspect-[9/16] relative overflow-hidden bg-[#1A1F26] cursor-pointer"
+                  onClick={() => openPlayer(duets, i)}
+                  data-ocid={`profile.duets.item.${i + 1}`}
+                >
+                  {item.thumbUrl ? (
+                    <img
+                      src={item.thumbUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#1A1F26] flex items-center justify-center">
+                      <GitMerge size={20} className="text-[#2A3038]" />
+                    </div>
+                  )}
+                  <div className="absolute top-1 left-1 bg-[#9333EA]/90 rounded-full px-1.5 py-0.5 flex items-center gap-0.5">
+                    <GitMerge size={9} className="text-white" />
+                    <span className="text-white text-[8px] font-bold">D</span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          ))}
       </div>
 
-      {activeTab === "duets" &&
-        (!duetsLoaded ? (
-          <div
-            className="flex justify-center py-16"
-            data-ocid="profile.duets.loading_state"
-          >
-            <div className="w-7 h-7 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
-          </div>
-        ) : duets.length === 0 ? (
-          <div
-            className="flex flex-col items-center justify-center py-16 gap-3"
-            data-ocid="profile.duets.empty_state"
-          >
-            <GitMerge size={40} className="text-[#2A3038]" />
-            <p className="text-[#8B95A3] text-sm text-center">
-              No duets yet. Tap Duet on any video to collaborate!
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-0.5">
-            {duets.map((item, i) => (
-              <div
-                key={item.id}
-                className="aspect-[9/16] relative overflow-hidden bg-[#1A1F26]"
-                data-ocid={`profile.duets.item.${i + 1}`}
-              >
-                {item.thumbUrl ? (
-                  <img
-                    src={item.thumbUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-[#1A1F26] flex items-center justify-center">
-                    <GitMerge size={20} className="text-[#2A3038]" />
-                  </div>
-                )}
-                <div className="absolute top-1 left-1 bg-[#9333EA]/90 rounded-full px-1.5 py-0.5 flex items-center gap-0.5">
-                  <GitMerge size={9} className="text-white" />
-                  <span className="text-white text-[8px] font-bold">Duet</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
+      {/* Avatar action sheet */}
+      <AvatarActionSheet
+        open={showAvatarSheet}
+        onClose={() => setShowAvatarSheet(false)}
+        onCamera={() => avatarCameraRef.current?.click()}
+        onGallery={() => avatarFileRef.current?.click()}
+      />
 
-      <EditProfileModal
+      {/* Hidden file inputs for avatar */}
+      <input
+        ref={avatarFileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) uploadAvatar(f);
+          e.target.value = "";
+        }}
+      />
+      <input
+        ref={avatarCameraRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) uploadAvatar(f);
+          e.target.value = "";
+        }}
+      />
+
+      {/* Enhanced edit profile sheet */}
+      <EditProfileSheet
         open={showEdit}
-        onClose={() => setShowEdit(false)}
         profile={profile}
+        onClose={() => setShowEdit(false)}
+        onChangeAvatar={() => {
+          setShowEdit(false);
+          setShowAvatarSheet(true);
+        }}
         onSave={(p) => {
           setProfile((prev) => ({ ...prev, ...p }));
           if (backend)

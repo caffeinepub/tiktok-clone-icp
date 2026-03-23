@@ -1,7 +1,9 @@
 import { Bell, Compass, Heart, Home, PlusSquare, User } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import VideoUploadModal from "./components/VideoUploadModal";
 import { useBackend } from "./hooks/useBackend";
+import { useStorageClient } from "./hooks/useStorageClient";
 import CameraPage from "./pages/CameraPage";
 import ChatPage from "./pages/ChatPage";
 import DuetPage from "./pages/DuetPage";
@@ -27,12 +29,16 @@ export default function App() {
   const [viewingPost, setViewingPost] = useState<string | null>(null);
   const [chatState, setChatState] = useState<ChatState | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
   const [duetState, setDuetState] = useState<{
     videoUrl: string;
     videoId: string;
   } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const { backend, isLoggedIn, login } = useBackend();
+  const imageStorageClient = useStorageClient("images");
+  const videoStorageClient = useStorageClient("videos");
+  const _uploadPhotoRef = useRef<((file: File) => Promise<void>) | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn || !backend) return;
@@ -56,6 +62,33 @@ export default function App() {
     username: string,
     avatarUrl: string,
   ) => setChatState({ principal, username, avatarUrl });
+
+  const handleGalleryVideo = async (
+    file: File,
+    quality: string,
+    visibility: string,
+  ) => {
+    if (!backend || !videoStorageClient) return;
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { hash: videoKey } = await videoStorageClient.putFile(bytes);
+      const title = `${file.name.replace(/\.[^.]+$/, "")} [${quality}] [${visibility}]`;
+      await backend.postVideo(title, "", [], videoKey, "");
+    } catch {
+      /* silent */
+    }
+  };
+
+  const handleGalleryPhoto = async (file: File) => {
+    if (!backend || !imageStorageClient) return;
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { hash: imageKey } = await imageStorageClient.putFile(bytes);
+      await backend.postPhoto(imageKey, file.name.replace(/\.[^.]+$/, ""), []);
+    } catch {
+      /* silent */
+    }
+  };
 
   if (!isLoggedIn) {
     return (
@@ -125,7 +158,7 @@ export default function App() {
         </div>
         <button
           type="button"
-          onClick={() => setShowCamera(true)}
+          onClick={() => setShowUploadModal(true)}
           data-ocid="header.primary_button"
           className="flex items-center gap-1.5 bg-[#22D3EE] text-black px-3 py-1.5 rounded-full text-sm font-bold"
         >
@@ -224,6 +257,18 @@ export default function App() {
           );
         })}
       </nav>
+
+      {/* Video Upload Modal */}
+      <VideoUploadModal
+        open={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        onRecord={() => {
+          setShowUploadModal(false);
+          setShowCamera(true);
+        }}
+        onGalleryVideo={handleGalleryVideo}
+        onGalleryPhoto={handleGalleryPhoto}
+      />
 
       {/* Camera overlay */}
       <AnimatePresence>

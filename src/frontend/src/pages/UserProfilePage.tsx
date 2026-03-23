@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   Grid3x3,
   Heart,
+  MessageCircle,
   Play,
   UserCheck,
   UserPlus,
@@ -24,9 +25,11 @@ interface VideoItem {
 export default function UserProfilePage({
   creatorId,
   onBack,
+  onOpenChat,
 }: {
   creatorId: string;
   onBack: () => void;
+  onOpenChat?: (principal: string, username: string, avatarUrl: string) => void;
 }) {
   const { isLoggedIn, identity, backend } = useBackend();
   const thumbStorageClient = useStorageClient("thumbnails");
@@ -200,7 +203,7 @@ export default function UserProfilePage({
       </div>
 
       <div className="px-4 pt-5 pb-3">
-        {/* Avatar + follow button */}
+        {/* Avatar + action buttons */}
         <div className="flex items-start justify-between mb-4">
           <div className="w-20 h-20 rounded-full border-2 border-[#22D3EE] overflow-hidden bg-[#1A1F26]">
             <img
@@ -209,26 +212,44 @@ export default function UserProfilePage({
               className="w-full h-full object-cover"
             />
           </div>
-          <button
-            type="button"
-            onClick={handleFollow}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all ${
-              isFollowing
-                ? "border border-[#2A3038] text-[#E9EEF5] bg-transparent"
-                : "bg-[#22D3EE] text-black"
-            }`}
-            data-ocid="user_profile.follow.button"
-          >
-            {isFollowing ? (
-              <>
-                <UserCheck size={16} /> Following
-              </>
-            ) : (
-              <>
-                <UserPlus size={16} /> Follow
-              </>
+          <div className="flex gap-2">
+            {onOpenChat && (
+              <button
+                type="button"
+                onClick={() =>
+                  onOpenChat(
+                    creatorId,
+                    profileData.username,
+                    profileData.avatar,
+                  )
+                }
+                className="flex items-center gap-1.5 bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white px-4 py-2.5 rounded-xl font-bold text-sm"
+                data-ocid="user_profile.message.primary_button"
+              >
+                <MessageCircle size={15} /> Message
+              </button>
             )}
-          </button>
+            <button
+              type="button"
+              onClick={handleFollow}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                isFollowing
+                  ? "border border-[#2A3038] text-[#E9EEF5] bg-transparent"
+                  : "bg-[#22D3EE] text-black"
+              }`}
+              data-ocid="user_profile.follow.button"
+            >
+              {isFollowing ? (
+                <>
+                  <UserCheck size={16} /> Following
+                </>
+              ) : (
+                <>
+                  <UserPlus size={16} /> Follow
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <h2 className="font-bold text-xl">@{profileData.username}</h2>
@@ -271,7 +292,7 @@ export default function UserProfilePage({
         </div>
       </div>
 
-      {/* Divider */}
+      {/* Tabs */}
       <div className="flex border-b border-[#2A3038] px-4 mb-3">
         <div className="flex items-center gap-2 py-3 px-4 text-sm font-semibold border-b-2 border-[#22D3EE] text-[#22D3EE]">
           <Grid3x3 size={16} /> Videos
