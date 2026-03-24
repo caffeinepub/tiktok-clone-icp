@@ -665,10 +665,13 @@ const TAB_CONFIG: Array<{
 export default function FeedPage({
   onViewProfile,
   isActive,
+  onDuet,
+  refreshKey = 0,
 }: {
   onViewProfile: (id: string) => void;
   isActive: boolean;
   onDuet?: (videoId: string, videoUrl: string) => void;
+  refreshKey?: number;
 }) {
   const { backend, isLoggedIn, identity } = useBackend();
   const videoStorageClient = useStorageClient("videos");
@@ -688,7 +691,8 @@ export default function FeedPage({
   const [showStoryCreator, setShowStoryCreator] = useState(false);
   const currentUserPrincipal = identity?.getPrincipal().toString() ?? null;
 
-  // Load feed from backend
+  // Load feed from backend — re-fetches when refreshKey changes (after uploads)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey intentionally triggers reload
   useEffect(() => {
     if (!backend) return;
     setLoading(true);
@@ -699,7 +703,7 @@ export default function FeedPage({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [backend]);
+  }, [backend, refreshKey]);
 
   // Load followed IDs
   useEffect(() => {
@@ -974,7 +978,10 @@ export default function FeedPage({
 
         {/* Loading state */}
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center z-20 bg-black">
+          <div
+            className="absolute inset-0 flex items-center justify-center z-20 bg-black"
+            data-ocid="feed.loading_state"
+          >
             <div className="flex flex-col items-center gap-3">
               <div className="w-10 h-10 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
               <p className="text-[#8B95A3] text-sm">Loading feed...</p>
@@ -1051,6 +1058,7 @@ export default function FeedPage({
           onEditSave={handleEditSave}
           currentUserPrincipal={currentUserPrincipal}
           feedActive={isActive}
+          onDuet={onDuet}
         />
 
         <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />

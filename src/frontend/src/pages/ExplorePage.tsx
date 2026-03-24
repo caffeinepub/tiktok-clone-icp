@@ -50,9 +50,11 @@ interface ResolvedUser {
 export default function ExplorePage({
   onViewProfile,
   onViewPost,
+  refreshKey = 0,
 }: {
   onViewProfile: (id: string) => void;
   onViewPost: (postId: string) => void;
+  refreshKey?: number;
 }) {
   const { backend } = useBackend();
   const thumbStorageClient = useStorageClient("thumbnails");
@@ -98,8 +100,8 @@ export default function ExplorePage({
     }
   };
 
-  // Load initial feed: photos + videos interleaved
-  // biome-ignore lint/correctness/useExhaustiveDependencies: storage clients are stable
+  // Load initial feed: photos + videos interleaved — re-fetches when refreshKey changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: storage clients are stable; refreshKey intentionally triggers reload
   useEffect(() => {
     if (!backend) return;
     setLoading(true);
@@ -160,7 +162,7 @@ export default function ExplorePage({
       .catch(() => {})
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [backend]);
+  }, [backend, refreshKey]);
 
   // Debounced search
   // biome-ignore lint/correctness/useExhaustiveDependencies: storage clients are stable
@@ -331,7 +333,10 @@ export default function ExplorePage({
       {/* Grid */}
       <div className="px-2 pb-6">
         {loading ? (
-          <div className="grid grid-cols-3 gap-0.5">
+          <div
+            className="grid grid-cols-3 gap-0.5"
+            data-ocid="explore.loading_state"
+          >
             {["a", "b", "c", "d", "e", "f", "g", "h", "i"].map((k) => (
               <div
                 key={k}

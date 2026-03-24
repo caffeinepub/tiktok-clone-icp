@@ -8,6 +8,7 @@ import {
   Heart,
   Image,
   Loader2,
+  Lock,
   Pin,
   Play,
   Settings,
@@ -413,6 +414,7 @@ export default function ProfilePage({
   const [showAuth, setShowAuth] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
   const [showAvatarSheet, setShowAvatarSheet] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>("videos");
   const [profile, setProfile] = useState<ProfileData>({
@@ -455,12 +457,7 @@ export default function ProfilePage({
   const coverFileRef = useRef<HTMLInputElement>(null);
   const avatarCameraRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (!identity) return;
-    const key = `cover:${identity.getPrincipal().toString()}`;
-    const stored = localStorage.getItem(key);
-    if (stored) setCoverUrl(stored);
-  }, [identity]);
+  // Cover photo is loaded from backend via coverPhotoKey
 
   useEffect(() => {
     if (!isLoggedIn || !identity || !backend) {
@@ -478,6 +475,9 @@ export default function ProfilePage({
       backend.getFollowing(myPrincipal),
       backend.getPinnedVideo(myPrincipal).catch(() => null),
       backend.getStoriesByUser(myPrincipal).catch(() => []),
+      backend
+        .getUserSettings()
+        .catch(() => ({ isPrivate: false, notificationsEnabled: true })),
     ])
       .then(
         async ([
@@ -488,7 +488,9 @@ export default function ProfilePage({
           following,
           pinnedOpt,
           userStories,
+          userSettings,
         ]) => {
+          setIsPrivate((userSettings as any)?.isPrivate ?? false);
           if ((profileOpt as any).__kind__ === "Some") {
             const p = (profileOpt as any).value;
             let avatar =
@@ -649,18 +651,21 @@ export default function ProfilePage({
   };
 
   const uploadCover = async (file: File) => {
-    if (!identity) return;
+    if (!backend || !thumbStorageClient || !identity) return;
     setCoverUploading(true);
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const key = `cover:${identity.getPrincipal().toString()}`;
-      localStorage.setItem(key, dataUrl);
-      setCoverUrl(dataUrl);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const { hash: coverPhotoKey } = await thumbStorageClient.putFile(bytes);
+      const coverPhotoUrl =
+        await thumbStorageClient.getDirectURL(coverPhotoKey);
+      await backend.updateProfile(
+        profile.username,
+        profile.bio,
+        profile.avatarKey || "",
+        coverPhotoKey,
+      );
+      setProfile((prev) => ({ ...prev, coverPhotoKey }));
+      setCoverUrl(coverPhotoUrl);
     } catch {}
     setCoverUploading(false);
   };
@@ -900,7 +905,10 @@ export default function ProfilePage({
           </div>
         </div>
 
-        <h2 className="font-bold text-xl">@{profile.username}</h2>
+        <h2 className="font-bold text-xl flex items-center gap-1.5">
+          @{profile.username}
+          {isPrivate && <Lock size={14} className="text-[#8B95A3] shrink-0" />}
+        </h2>
         <p className="text-[#A6B0BC] text-sm mt-0.5">{extras.cleanBio}</p>
         {extras.pronouns && (
           <p className="text-[#8B95A3] text-xs mt-1">{extras.pronouns}</p>

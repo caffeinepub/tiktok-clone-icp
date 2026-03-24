@@ -111,7 +111,31 @@ actor {
     createdAt : Int;
   };
 
+  public type StoryComment = {
+    id : Text;
+    storyId : Text;
+    author : Principal;
+    text : Text;
+    createdAt : Int;
+  };
+
+  public type StoryReaction = {
+    id : Text;
+    storyId : Text;
+    user : Principal;
+    emoji : Text;
+    createdAt : Int;
+  };
+
+  public type FollowRequest = {
+    id : Text;
+    from : Principal;
+    to : Principal;
+    createdAt : Int;
+  };
+
   stable var _users : [(Text, UserProfile)] = [];
+  stable var _coverPhotoKeys : [(Text, Text)] = [];
   stable var _videos : [(Text, Video)] = [];
   stable var _posts : [(Text, Post)] = [];
   stable var _comments : [(Text, Comment)] = [];
@@ -131,6 +155,9 @@ actor {
   stable var _matches : [(Text, Match)] = [];
   stable var _messages : [(Text, Message)] = [];
   stable var _duets : [(Text, Duet)] = [];
+  stable var _storyComments : [(Text, StoryComment)] = [];
+  stable var _storyReactions : [(Text, StoryReaction)] = [];
+  stable var _followRequests : [(Text, FollowRequest)] = [];
   stable var _videoCounter : Nat = 0;
   stable var _commentCounter : Nat = 0;
   stable var _notifCounter : Nat = 0;
@@ -140,8 +167,12 @@ actor {
   stable var _matchCounter : Nat = 0;
   stable var _messageCounter : Nat = 0;
   stable var _duetCounter : Nat = 0;
+  stable var _storyCommentCounter : Nat = 0;
+  stable var _storyReactionCounter : Nat = 0;
+  stable var _followRequestCounter : Nat = 0;
 
   var users : Map.Map<Text, UserProfile> = Map.fromArray(_users);
+  var coverPhotoKeys : Map.Map<Text, Text> = Map.fromArray(_coverPhotoKeys);
   var videos : Map.Map<Text, Video> = Map.fromArray(_videos);
   var posts : Map.Map<Text, Post> = Map.fromArray(_posts);
   var comments : Map.Map<Text, Comment> = Map.fromArray(_comments);
@@ -161,9 +192,13 @@ actor {
   var matches : Map.Map<Text, Match> = Map.fromArray(_matches);
   var messages : Map.Map<Text, Message> = Map.fromArray(_messages);
   var duets : Map.Map<Text, Duet> = Map.fromArray(_duets);
+  var storyComments : Map.Map<Text, StoryComment> = Map.fromArray(_storyComments);
+  var storyReactions : Map.Map<Text, StoryReaction> = Map.fromArray(_storyReactions);
+  var followRequests : Map.Map<Text, FollowRequest> = Map.fromArray(_followRequests);
 
   system func preupgrade() {
     _users := users.toArray();
+    _coverPhotoKeys := coverPhotoKeys.toArray();
     _videos := videos.toArray();
     _posts := posts.toArray();
     _comments := comments.toArray();
@@ -183,6 +218,9 @@ actor {
     _matches := matches.toArray();
     _messages := messages.toArray();
     _duets := duets.toArray();
+    _storyComments := storyComments.toArray();
+    _storyReactions := storyReactions.toArray();
+    _followRequests := followRequests.toArray();
   };
 
   func pkey(p : Principal) : Text = p.toText();
@@ -196,6 +234,9 @@ actor {
   func nextMatchId() : Text { _matchCounter += 1; "m" # _matchCounter.toText() };
   func nextMessageId() : Text { _messageCounter += 1; "msg" # _messageCounter.toText() };
   func nextDuetId() : Text { _duetCounter += 1; "d" # _duetCounter.toText() };
+  func nextStoryCommentId() : Text { _storyCommentCounter += 1; "sc" # _storyCommentCounter.toText() };
+  func nextStoryReactionId() : Text { _storyReactionCounter += 1; "sr" # _storyReactionCounter.toText() };
+  func nextFollowRequestId() : Text { _followRequestCounter += 1; "fr" # _followRequestCounter.toText() };
 
   func hasPrincipal(arr : [Principal], p : Principal) : Bool {
     var found = false;
@@ -241,6 +282,13 @@ actor {
     if (ak < bk) { ak # "_" # bk } else { bk # "_" # ak };
   };
 
+  func isPrivateAccount(p : Principal) : Bool {
+    switch (userSettings.get(pkey(p))) {
+      case (?s) s.isPrivate;
+      case null false;
+    };
+  };
+
   // ===== USERS =====
   public shared ({ caller }) func registerUser(username : Text, bio : Text, avatarKey : Text) : async () {
     users.add(pkey(caller), { principal = caller; username; bio; avatarKey; createdAt = Time.now() });
@@ -254,10 +302,30 @@ actor {
     users.add(key, { principal = caller; username; bio; avatarKey; createdAt });
   };
 
+  public shared ({ caller }) func updateCoverPhoto(coverPhotoKey : Text) : async () {
+    coverPhotoKeys.add(pkey(caller), coverPhotoKey);
+  };
+
+  public query func getCoverPhoto(p : Principal) : async ?Text {
+    coverPhotoKeys.get(pkey(p));
+  };
+
   public shared ({ caller }) func followUser(target : Principal) : async () {
     let key = pkey(caller);
     let current = following.get(key).get([]);
-    if (not hasPrincipal(current, target)) {
+    if (hasPrincipal(current, target)) return;
+    if (isPrivateAccount(target)) {
+      // Check if a pending request already exists
+      var exists = false;
+      for ((_, req) in followRequests.entries()) {
+        if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) { exists := true };
+      };
+      if (not exists) {
+        let id = nextFollowRequestId();
+        followRequests.add(id, { id; from = caller; to = target; createdAt = Time.now() });
+        createNotif(target, caller, "follow_request", null);
+      };
+    } else {
       following.add(key, current.concat([target]));
       createNotif(target, caller, "follow", null);
     };
@@ -266,6 +334,12 @@ actor {
   public shared ({ caller }) func unfollowUser(target : Principal) : async () {
     let key = pkey(caller);
     following.add(key, removePrincipal(following.get(key).get([]), target));
+    // Also remove any pending follow request
+    for ((reqId, req) in followRequests.entries()) {
+      if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) {
+        followRequests.remove(reqId);
+      };
+    };
   };
 
   public query func getFollowing(p : Principal) : async [Principal] = async following.get(pkey(p)).get([]);
@@ -295,6 +369,71 @@ actor {
     var arr : [UserProfile] = [];
     for ((_, u) in users.entries()) { arr := arr.concat([u]) };
     arr;
+  };
+
+  // ===== FOLLOW REQUESTS =====
+  public shared ({ caller }) func sendFollowRequest(target : Principal) : async () {
+    var exists = false;
+    for ((_, req) in followRequests.entries()) {
+      if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) { exists := true };
+    };
+    if (not exists) {
+      let id = nextFollowRequestId();
+      followRequests.add(id, { id; from = caller; to = target; createdAt = Time.now() });
+      createNotif(target, caller, "follow_request", null);
+    };
+  };
+
+  public shared ({ caller }) func acceptFollowRequest(requestId : Text) : async Bool {
+    switch (followRequests.get(requestId)) {
+      case null false;
+      case (?req) {
+        if (not Principal.equal(req.to, caller)) return false;
+        followRequests.remove(requestId);
+        let fromKey = pkey(req.from);
+        let current = following.get(fromKey).get([]);
+        if (not hasPrincipal(current, caller)) {
+          following.add(fromKey, current.concat([caller]));
+        };
+        createNotif(req.from, caller, "follow_request_accepted", null);
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func declineFollowRequest(requestId : Text) : async Bool {
+    switch (followRequests.get(requestId)) {
+      case null false;
+      case (?req) {
+        if (not Principal.equal(req.to, caller)) return false;
+        followRequests.remove(requestId);
+        true;
+      };
+    };
+  };
+
+  public shared ({ caller }) func cancelFollowRequest(target : Principal) : async () {
+    for ((reqId, req) in followRequests.entries()) {
+      if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) {
+        followRequests.remove(reqId);
+      };
+    };
+  };
+
+  public shared query ({ caller }) func getPendingFollowRequests() : async [FollowRequest] {
+    var arr : [FollowRequest] = [];
+    for ((_, req) in followRequests.entries()) {
+      if (Principal.equal(req.to, caller)) { arr := arr.concat([req]) };
+    };
+    arr;
+  };
+
+  public shared query ({ caller }) func hasPendingFollowRequest(target : Principal) : async Bool {
+    var found = false;
+    for ((_, req) in followRequests.entries()) {
+      if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) { found := true };
+    };
+    found;
   };
 
   // ===== USER SETTINGS =====
@@ -670,6 +809,43 @@ actor {
     found;
   };
 
+  // ===== STORY REACTIONS =====
+  public shared ({ caller }) func addStoryReaction(storyId : Text, emoji : Text) : async () {
+    // Remove existing reaction from this user for this story
+    for ((rId, r) in storyReactions.entries()) {
+      if (r.storyId == storyId and Principal.equal(r.user, caller)) {
+        storyReactions.remove(rId);
+      };
+    };
+    let id = nextStoryReactionId();
+    storyReactions.add(id, { id; storyId; user = caller; emoji; createdAt = Time.now() });
+    switch (stories.get(storyId)) {
+      case (?s) { createNotif(s.creator, caller, "story_reaction", null) };
+      case null {};
+    };
+  };
+
+  public shared ({ caller }) func removeStoryReaction(storyId : Text) : async () {
+    for ((rId, r) in storyReactions.entries()) {
+      if (r.storyId == storyId and Principal.equal(r.user, caller)) {
+        storyReactions.remove(rId);
+      };
+    };
+  };
+
+  public query func getStoryReactions(storyId : Text) : async [StoryReaction] {
+    var arr : [StoryReaction] = [];
+    for ((_, r) in storyReactions.entries()) { if (r.storyId == storyId) { arr := arr.concat([r]) } };
+    arr;
+  };
+
+  public shared query ({ caller }) func getMyStoryReaction(storyId : Text) : async ?StoryReaction {
+    for ((_, r) in storyReactions.entries()) {
+      if (r.storyId == storyId and Principal.equal(r.user, caller)) { return ?r };
+    };
+    null;
+  };
+
   // ===== TINDER SWIPE =====
   public shared ({ caller }) func swipeRight(target : Principal) : async Bool {
     let callerKey = pkey(caller);
@@ -861,6 +1037,34 @@ actor {
       case (?d) {
         if (not Principal.equal(d.creator, caller)) return false;
         duets.remove(id);
+        true;
+      };
+    };
+  };
+
+  // ===== STORY COMMENTS =====
+  public shared ({ caller }) func addStoryComment(storyId : Text, text : Text) : async Text {
+    let id = nextStoryCommentId();
+    storyComments.add(id, { id; storyId; author = caller; text; createdAt = Time.now() });
+    switch (stories.get(storyId)) {
+      case (?s) { createNotif(s.creator, caller, "story_comment", null) };
+      case null {};
+    };
+    id;
+  };
+
+  public query func getStoryComments(storyId : Text) : async [StoryComment] {
+    var arr : [StoryComment] = [];
+    for ((_, c) in storyComments.entries()) { if (c.storyId == storyId) { arr := arr.concat([c]) } };
+    arr.sort(func(a : StoryComment, b : StoryComment) : Order.Order = Int.compare(a.createdAt, b.createdAt));
+  };
+
+  public shared ({ caller }) func deleteStoryComment(commentId : Text) : async Bool {
+    switch (storyComments.get(commentId)) {
+      case null false;
+      case (?c) {
+        if (not Principal.equal(c.author, caller)) return false;
+        storyComments.remove(commentId);
         true;
       };
     };

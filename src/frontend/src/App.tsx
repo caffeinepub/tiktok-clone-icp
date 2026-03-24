@@ -1,4 +1,4 @@
-import { Bell, Compass, Heart, Home, PlusSquare, User } from "lucide-react";
+import { Bell, CloudUpload, Compass, Heart, Home, User, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import VideoUploadModal from "./components/VideoUploadModal";
@@ -23,6 +23,33 @@ interface ChatState {
   avatarUrl: string;
 }
 
+/** Wait up to `timeoutMs` for a value supplier to return non-null/undefined. */
+function waitForValue<T>(
+  getValue: () => T | null | undefined,
+  timeoutMs = 30000,
+  intervalMs = 200,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const v = getValue();
+    if (v != null) {
+      resolve(v);
+      return;
+    }
+    const interval = setInterval(() => {
+      const v2 = getValue();
+      if (v2 != null) {
+        clearInterval(interval);
+        clearTimeout(timer);
+        resolve(v2);
+      }
+    }, intervalMs);
+    const timer = setTimeout(() => {
+      clearInterval(interval);
+      reject(new Error("Upload service not ready. Please try again."));
+    }, timeoutMs);
+  });
+}
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [viewingCreator, setViewingCreator] = useState<string | null>(null);
@@ -35,10 +62,37 @@ export default function App() {
     videoId: string;
   } | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState<{
+    filename: string;
+    percent: number;
+  } | null>(null);
+  const [feedRefreshKey, setFeedRefreshKey] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const { backend, isLoggedIn, login } = useBackend();
   const imageStorageClient = useStorageClient("images");
   const videoStorageClient = useStorageClient("videos");
   const _uploadPhotoRef = useRef<((file: File) => Promise<void>) | null>(null);
+
+  // Keep refs so waitForValue closures always see latest values
+  const backendRef = useRef(backend);
+  const imageStorageClientRef = useRef(imageStorageClient);
+  const videoStorageClientRef = useRef(videoStorageClient);
+  useEffect(() => {
+    backendRef.current = backend;
+  }, [backend]);
+  useEffect(() => {
+    imageStorageClientRef.current = imageStorageClient;
+  }, [imageStorageClient]);
+  useEffect(() => {
+    videoStorageClientRef.current = videoStorageClient;
+  }, [videoStorageClient]);
+
+  // Auto-dismiss upload errors after 4 seconds
+  useEffect(() => {
+    if (!uploadError) return;
+    const t = setTimeout(() => setUploadError(null), 4000);
+    return () => clearTimeout(t);
+  }, [uploadError]);
 
   useEffect(() => {
     if (!isLoggedIn || !backend) return;
@@ -68,25 +122,81 @@ export default function App() {
     quality: string,
     visibility: string,
   ) => {
-    if (!backend || !videoStorageClient) return;
+    if (!isLoggedIn) {
+      login();
+      return;
+    }
+    // Close modal and navigate to Home so user sees the progress bar
+    setShowUploadModal(false);
+    setActiveTab("home");
+    setUploadProgress({ filename: "Connecting...", percent: 0 });
+    setUploadError(null);
     try {
+      // Fast-path: skip polling if already ready
+      let be = backendRef.current;
+      let vc = videoStorageClientRef.current;
+      if (be == null || vc == null) {
+        // Show connecting state and wait
+        [be, vc] = await Promise.all([
+          waitForValue(() => backendRef.current),
+          waitForValue(() => videoStorageClientRef.current),
+        ]);
+      }
+      setUploadProgress({ filename: file.name, percent: 0 });
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { hash: videoKey } = await videoStorageClient.putFile(bytes);
+      const { hash: videoKey } = await vc.putFile(bytes, (pct: number) =>
+        setUploadProgress({ filename: file.name, percent: pct }),
+      );
       const title = `${file.name.replace(/\.[^.]+$/, "")} [${quality}] [${visibility}]`;
-      await backend.postVideo(title, "", [], videoKey, "");
-    } catch {
-      /* silent */
+      await be.postVideo(title, "", [], videoKey, "");
+      setFeedRefreshKey((k) => k + 1);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Video upload failed. Please try again.";
+      setUploadError(msg);
+    } finally {
+      setUploadProgress(null);
     }
   };
 
   const handleGalleryPhoto = async (file: File) => {
-    if (!backend || !imageStorageClient) return;
+    if (!isLoggedIn) {
+      login();
+      return;
+    }
+    // Close modal and navigate to Home so user sees the progress bar
+    setShowUploadModal(false);
+    setActiveTab("home");
+    setUploadProgress({ filename: "Connecting...", percent: 0 });
+    setUploadError(null);
     try {
+      // Fast-path: skip polling if already ready
+      let be = backendRef.current;
+      let ic = imageStorageClientRef.current;
+      if (be == null || ic == null) {
+        // Show connecting state and wait
+        [be, ic] = await Promise.all([
+          waitForValue(() => backendRef.current),
+          waitForValue(() => imageStorageClientRef.current),
+        ]);
+      }
+      setUploadProgress({ filename: file.name, percent: 0 });
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { hash: imageKey } = await imageStorageClient.putFile(bytes);
-      await backend.postPhoto(imageKey, file.name.replace(/\.[^.]+$/, ""), []);
-    } catch {
-      /* silent */
+      const { hash: imageKey } = await ic.putFile(bytes, (pct: number) =>
+        setUploadProgress({ filename: file.name, percent: pct }),
+      );
+      await be.postPhoto(imageKey, file.name.replace(/\.[^.]+$/, ""), []);
+      setFeedRefreshKey((k) => k + 1);
+    } catch (err) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Photo upload failed. Please try again.";
+      setUploadError(msg);
+    } finally {
+      setUploadProgress(null);
     }
   };
 
@@ -166,6 +276,32 @@ export default function App() {
         </button>
       </header>
 
+      {/* Upload error banner */}
+      <AnimatePresence>
+        {uploadError && (
+          <motion.div
+            key="upload-error"
+            data-ocid="upload.error_state"
+            className="shrink-0 flex items-center justify-between gap-2 bg-[#FF3B5C]/15 border-b border-[#FF3B5C]/30 px-4 py-2.5"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+          >
+            <span className="text-[#FF3B5C] text-xs font-semibold flex-1">
+              {uploadError}
+            </span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="text-[#FF3B5C] shrink-0"
+              aria-label="Dismiss error"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Page content */}
       <main className="flex-1 overflow-hidden relative">
         <div className={activeTab === "home" ? "block h-full" : "hidden"}>
@@ -173,12 +309,14 @@ export default function App() {
             onViewProfile={handleViewProfile}
             isActive={activeTab === "home"}
             onDuet={(videoId, videoUrl) => setDuetState({ videoId, videoUrl })}
+            refreshKey={feedRefreshKey}
           />
         </div>
         <div className={activeTab === "explore" ? "block h-full" : "hidden"}>
           <ExplorePage
             onViewProfile={handleViewProfile}
             onViewPost={handleViewPost}
+            refreshKey={feedRefreshKey}
           />
         </div>
         <div className={activeTab === "match" ? "block h-full" : "hidden"}>
@@ -342,6 +480,53 @@ export default function App() {
             avatarUrl={chatState.avatarUrl}
             onBack={() => setChatState(null)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Upload Progress Bar */}
+      <AnimatePresence>
+        {uploadProgress && (
+          <motion.div
+            key="upload-progress"
+            data-ocid="upload.loading_state"
+            className="fixed bottom-[72px] left-0 right-0 z-[60] px-3 pb-1"
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 260 }}
+          >
+            <div className="bg-[#151920] border border-[#2A3038] rounded-2xl px-4 py-3 shadow-2xl shadow-black/60">
+              <div className="flex items-center gap-3">
+                <div className="shrink-0 w-8 h-8 rounded-xl bg-[#22D3EE]/10 flex items-center justify-center">
+                  <CloudUpload size={16} className="text-[#22D3EE]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[#E9EEF5] text-xs font-semibold truncate max-w-[180px]">
+                      {uploadProgress.filename}
+                    </span>
+                    <span className="text-[#22D3EE] text-xs font-bold ml-2 shrink-0">
+                      {uploadProgress.filename === "Connecting..."
+                        ? "..."
+                        : `${uploadProgress.percent}%`}
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full rounded-full bg-[#2A3038] overflow-hidden">
+                    {uploadProgress.filename === "Connecting..." ? (
+                      <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#22D3EE] to-[#0EA5E9] animate-pulse" />
+                    ) : (
+                      <motion.div
+                        className="h-full rounded-full bg-gradient-to-r from-[#22D3EE] to-[#0EA5E9]"
+                        initial={{ width: "0%" }}
+                        animate={{ width: `${uploadProgress.percent}%` }}
+                        transition={{ duration: 0.3, ease: "easeOut" }}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

@@ -71,6 +71,29 @@ export interface Story {
   expiresAt: bigint;
 }
 
+export interface StoryReaction {
+  id: string;
+  storyId: string;
+  user: Principal;
+  emoji: string;
+  createdAt: bigint;
+}
+
+export interface StoryComment {
+  id: string;
+  storyId: string;
+  author: Principal;
+  text: string;
+  createdAt: bigint;
+}
+
+export interface FollowRequest {
+  id: string;
+  from: Principal;
+  to: Principal;
+  createdAt: bigint;
+}
+
 export interface UserSettings {
   isPrivate: boolean;
   notificationsEnabled: boolean;
@@ -126,6 +149,8 @@ export interface backendInterface {
   registerUser(username: string, bio: string, avatarKey: string): Promise<void>;
   getProfile(p: Principal): Promise<Option<UserProfile>>;
   updateProfile(username: string, bio: string, avatarKey: string): Promise<void>;
+  updateCoverPhoto(coverPhotoKey: string): Promise<void>;
+  getCoverPhoto(p: Principal): Promise<Option<string>>;
   followUser(target: Principal): Promise<void>;
   unfollowUser(target: Principal): Promise<void>;
   getFollowing(p: Principal): Promise<Principal[]>;
@@ -136,6 +161,14 @@ export interface backendInterface {
   // User Settings
   getUserSettings(): Promise<UserSettings>;
   updateUserSettings(isPrivate: boolean, notificationsEnabled: boolean): Promise<void>;
+
+  // Follow Requests
+  sendFollowRequest(target: Principal): Promise<void>;
+  acceptFollowRequest(requestId: string): Promise<boolean>;
+  declineFollowRequest(requestId: string): Promise<boolean>;
+  cancelFollowRequest(target: Principal): Promise<void>;
+  getPendingFollowRequests(): Promise<FollowRequest[]>;
+  hasPendingFollowRequest(target: Principal): Promise<boolean>;
 
   // Videos
   postVideo(title: string, description: string, hashtags: string[], videoKey: string, thumbnailKey: string): Promise<string>;
@@ -191,6 +224,17 @@ export interface backendInterface {
   viewStory(id: string): Promise<void>;
   getViewedStoryIds(): Promise<string[]>;
   hasUnviewedStories(p: Principal): Promise<boolean>;
+
+  // Story Reactions
+  addStoryReaction(storyId: string, emoji: string): Promise<void>;
+  removeStoryReaction(storyId: string): Promise<void>;
+  getStoryReactions(storyId: string): Promise<StoryReaction[]>;
+  getMyStoryReaction(storyId: string): Promise<Option<StoryReaction>>;
+
+  // Story Comments
+  addStoryComment(storyId: string, text: string): Promise<string>;
+  getStoryComments(storyId: string): Promise<StoryComment[]>;
+  deleteStoryComment(commentId: string): Promise<boolean>;
 
   // Photo Posts (Instagram)
   postPhoto(imageKey: string, caption: string, hashtags: string[]): Promise<string>;

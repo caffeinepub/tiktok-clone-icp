@@ -1,6 +1,7 @@
 import type { Principal } from "@icp-sdk/core/principal";
 import {
   ArrowLeft,
+  Clock,
   Grid3x3,
   Heart,
   MessageCircle,
@@ -34,6 +35,7 @@ export default function UserProfilePage({
   const { isLoggedIn, identity, backend } = useBackend();
   const thumbStorageClient = useStorageClient("thumbnails");
   const [isFollowing, setIsFollowing] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState<{
@@ -138,11 +140,18 @@ export default function UserProfilePage({
           const myFollowing = await backend.getFollowing(
             identity.getPrincipal(),
           );
-          setIsFollowing(
-            (myFollowing as Principal[]).some(
-              (p) => p.toString() === creatorId,
-            ),
+          const following = (myFollowing as Principal[]).some(
+            (p) => p.toString() === creatorId,
           );
+          setIsFollowing(following);
+          if (!following) {
+            try {
+              const hasPending = await (backend as any).hasPendingFollowRequest(
+                principal,
+              );
+              setPendingRequest(!!hasPending);
+            } catch {}
+          }
         }
       } catch {}
     };
@@ -163,13 +172,33 @@ export default function UserProfilePage({
         setIsFollowing(true);
         setFollowerCount((c) => c + 1n);
       });
-    } else {
-      setIsFollowing(true);
-      setFollowerCount((c) => c + 1n);
-      backend.followUser(creatorPrincipal).catch(() => {
-        setIsFollowing(false);
-        setFollowerCount((c) => (c > 0n ? c - 1n : 0n));
+    } else if (pendingRequest) {
+      // Cancel the pending follow request
+      setPendingRequest(false);
+      (backend as any).cancelFollowRequest(creatorPrincipal).catch(() => {
+        setPendingRequest(true);
       });
+    } else {
+      // Try to follow - if private account, backend auto-creates a follow request
+      backend
+        .followUser(creatorPrincipal)
+        .then(() => {
+          // Check if we actually followed or just sent a request
+          return backend
+            .getFollowing(creatorPrincipal)
+            .then(() =>
+              (backend as any).hasPendingFollowRequest(creatorPrincipal),
+            )
+            .then((pending: boolean) => {
+              if (pending) {
+                setPendingRequest(true);
+              } else {
+                setIsFollowing(true);
+                setFollowerCount((c) => c + 1n);
+              }
+            });
+        })
+        .catch(() => {});
     }
   };
 
@@ -235,13 +264,19 @@ export default function UserProfilePage({
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
                 isFollowing
                   ? "border border-[#2A3038] text-[#E9EEF5] bg-transparent"
-                  : "bg-[#22D3EE] text-black"
+                  : pendingRequest
+                    ? "border border-[#22D3EE]/50 text-[#22D3EE] bg-transparent"
+                    : "bg-[#22D3EE] text-black"
               }`}
               data-ocid="user_profile.follow.button"
             >
               {isFollowing ? (
                 <>
                   <UserCheck size={16} /> Following
+                </>
+              ) : pendingRequest ? (
+                <>
+                  <Clock size={16} /> Requested
                 </>
               ) : (
                 <>

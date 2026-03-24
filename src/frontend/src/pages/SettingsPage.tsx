@@ -11,6 +11,7 @@ import {
   Monitor,
   Send,
   Shield,
+  Unlock,
   User,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -235,14 +236,63 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
             <h2 className="text-xs text-[#8B95A3] font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
               <Shield size={12} /> Privacy
             </h2>
-            <div className="bg-[#1A1F26] rounded-2xl overflow-hidden border border-[#2A3038]">
-              <SettingRow
-                label="Private Account"
-                description="Only followers can see your videos"
+
+            {/* Prominent Private Account Card */}
+            <motion.button
+              type="button"
+              onClick={() => handlePrivateToggle(!isPrivate)}
+              className={`w-full mb-3 rounded-2xl border-2 p-4 flex items-center gap-4 transition-all ${
+                isPrivate
+                  ? "bg-[#22D3EE]/10 border-[#22D3EE]/50"
+                  : "bg-[#1A1F26] border-[#2A3038]"
+              }`}
+              whileTap={{ scale: 0.98 }}
+              data-ocid="settings.private_account.toggle"
+            >
+              <div
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                  isPrivate ? "bg-[#22D3EE]/20" : "bg-[#2A3038]"
+                }`}
+              >
+                {isPrivate ? (
+                  <Lock size={22} className="text-[#22D3EE]" />
+                ) : (
+                  <Unlock size={22} className="text-[#8B95A3]" />
+                )}
+              </div>
+              <div className="flex-1 text-left">
+                <div className="flex items-center gap-2">
+                  <p
+                    className={`text-sm font-bold ${
+                      isPrivate ? "text-[#22D3EE]" : "text-[#E9EEF5]"
+                    }`}
+                  >
+                    {isPrivate ? "Private Account" : "Public Account"}
+                  </p>
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isPrivate
+                        ? "bg-[#22D3EE]/20 text-[#22D3EE]"
+                        : "bg-[#2A3038] text-[#8B95A3]"
+                    }`}
+                  >
+                    {isPrivate ? "ON" : "OFF"}
+                  </span>
+                </div>
+                <p className="text-xs text-[#8B95A3] mt-0.5 leading-snug">
+                  {isPrivate
+                    ? "Only your followers can see your videos and posts"
+                    : "Anyone can discover and view your content"}
+                </p>
+              </div>
+              <Switch
                 checked={isPrivate}
-                onChange={handlePrivateToggle}
-                ocid="settings.private_account.switch"
+                onCheckedChange={handlePrivateToggle}
+                data-ocid="settings.private_account.switch"
               />
+            </motion.button>
+
+            <div className="bg-[#1A1F26] rounded-2xl overflow-hidden border border-[#2A3038]">
               <SettingRow
                 label="Show Activity Status"
                 description="Let others see when you're active"
@@ -473,7 +523,7 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
               <div className="px-4 py-4 space-y-1">
                 <div className="flex justify-between">
                   <p className="text-sm text-[#E9EEF5]">App Version</p>
-                  <p className="text-sm text-[#8B95A3]">12.0.0</p>
+                  <p className="text-sm text-[#8B95A3]">13.0.0</p>
                 </div>
                 <div className="flex justify-between">
                   <p className="text-sm text-[#E9EEF5]">Platform</p>

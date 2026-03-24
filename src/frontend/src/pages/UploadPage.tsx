@@ -21,19 +21,45 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const thumbInputRef = useRef<HTMLInputElement>(null);
 
+  // Refs to always get latest values in async context
+  const videoStorageClientRef = useRef(videoStorageClient);
+  const thumbStorageClientRef = useRef(thumbStorageClient);
+  const backendRef = useRef(backend);
+  videoStorageClientRef.current = videoStorageClient;
+  thumbStorageClientRef.current = thumbStorageClient;
+  backendRef.current = backend;
+
+  const waitReady = async () => {
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      if (videoStorageClientRef.current && backendRef.current) return true;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return false;
+  };
+
   const handleUpload = async () => {
     if (!isLoggedIn) {
       setShowAuth(true);
       return;
     }
     if (!videoFile || !title.trim()) return;
-    if (!videoStorageClient || !backend) {
-      setError("Storage not ready. Please try again.");
-      return;
-    }
     setUploading(true);
     setError(null);
+    setProgress(0);
     try {
+      const ready = await waitReady();
+      if (!ready) {
+        setError("Upload service not ready. Please try again in a moment.");
+        return;
+      }
+      const vc = videoStorageClientRef.current;
+      const be = backendRef.current;
+      if (!vc || !be) {
+        setError("Upload service not ready. Please try again in a moment.");
+        return;
+      }
+
       const tags = hashtags
         .split(",")
         .map((t) => t.trim().replace(/^#/, ""))
@@ -41,23 +67,23 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
 
       // Upload video
       const videoBytes = new Uint8Array(await videoFile.arrayBuffer());
-      const { hash: videoHash } = await videoStorageClient.putFile(
-        videoBytes,
-        (pct) => setProgress(Math.round(pct * 0.85)),
+      const { hash: videoHash } = await vc.putFile(videoBytes, (pct) =>
+        setProgress(Math.round(pct * 0.85)),
       );
 
       // Upload thumbnail if provided
       let thumbHash = "";
-      if (thumbFile && thumbStorageClient) {
+      const tc = thumbStorageClientRef.current;
+      if (thumbFile && tc) {
         const thumbBytes = new Uint8Array(await thumbFile.arrayBuffer());
-        const { hash } = await thumbStorageClient.putFile(thumbBytes, (pct) =>
+        const { hash } = await tc.putFile(thumbBytes, (pct) =>
           setProgress(85 + Math.round(pct * 0.1)),
         );
         thumbHash = hash;
       }
 
       setProgress(95);
-      await backend.postVideo(title, description, tags, videoHash, thumbHash);
+      await be.postVideo(title, description, tags, videoHash, thumbHash);
       setProgress(100);
       await new Promise((r) => setTimeout(r, 500));
       setDone(true);
@@ -211,13 +237,17 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
       {uploading && (
         <div className="mb-4">
           <div className="flex justify-between text-xs text-[#A6B0BC] mb-1">
-            <span>Uploading...</span>
+            <span>
+              {progress === 0
+                ? "Connecting to upload service..."
+                : "Uploading..."}
+            </span>
             <span>{progress}%</span>
           </div>
           <div className="w-full h-2 bg-[#2A3038] rounded-full">
             <div
               className="h-full bg-[#22D3EE] rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
+              style={{ width: progress === 0 ? "10%" : `${progress}%` }}
             />
           </div>
         </div>
@@ -230,7 +260,11 @@ export default function UploadPage({ onDone }: { onDone: () => void }) {
         className="w-full py-4 rounded-2xl bg-[#22D3EE] text-black font-bold text-base disabled:opacity-40"
         data-ocid="upload.submit_button"
       >
-        {uploading ? "Uploading..." : "Post Video"}
+        {uploading
+          ? progress === 0
+            ? "Connecting..."
+            : "Uploading..."
+          : "Post Video"}
       </button>
     </div>
   );

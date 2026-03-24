@@ -36,17 +36,22 @@ interface ConversationItem {
 const typeIcon = (t: string) => {
   if (t === "like")
     return <Heart size={14} className="text-[#FF3B5C] fill-[#FF3B5C]" />;
-  if (t === "comment")
+  if (t === "comment" || t === "story_comment")
     return <MessageCircle size={14} className="text-[#22D3EE]" />;
   if (t === "match")
     return <Heart size={14} className="text-[#FF8C69] fill-[#FF8C69]" />;
+  if (t === "follow_request" || t === "follow_request_accepted")
+    return <UserPlus size={14} className="text-[#22D3EE]" />;
+  if (t === "story_reaction") return <span className="text-xs">😊</span>;
   return <UserPlus size={14} className="text-[#3B82F6]" />;
 };
 
 const typeBg = (t: string) => {
   if (t === "like") return "bg-[#FF3B5C]/20";
-  if (t === "comment") return "bg-[#22D3EE]/20";
+  if (t === "comment" || t === "story_comment") return "bg-[#22D3EE]/20";
   if (t === "match") return "bg-[#FF8C69]/20";
+  if (t === "follow_request" || t === "follow_request_accepted")
+    return "bg-[#22D3EE]/20";
   return "bg-[#3B82F6]/20";
 };
 
@@ -54,6 +59,10 @@ const typeText = (t: string, videoId: string | null) => {
   if (t === "like") return videoId ? "liked your video" : "liked something";
   if (t === "comment") return "commented on your video";
   if (t === "match") return "You matched! 🎉";
+  if (t === "follow_request") return "sent you a follow request";
+  if (t === "follow_request_accepted") return "accepted your follow request";
+  if (t === "story_reaction") return "reacted to your story";
+  if (t === "story_comment") return "commented on your story";
   return "started following you";
 };
 
@@ -70,6 +79,41 @@ export default function InboxPage({
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [convsLoading, setConvsLoading] = useState(false);
+  const [processingRequest, setProcessingRequest] = useState<string | null>(
+    null,
+  );
+
+  const handleAcceptFollowRequest = async (senderId: string) => {
+    if (!backend) return;
+    setProcessingRequest(senderId);
+    try {
+      const requests = await (backend as any).getPendingFollowRequests();
+      const req = (requests as any[]).find(
+        (r: any) => r.from.toString() === senderId,
+      );
+      if (req) {
+        await (backend as any).acceptFollowRequest(req.id);
+        await loadNotifications();
+      }
+    } catch {}
+    setProcessingRequest(null);
+  };
+
+  const handleDeclineFollowRequest = async (senderId: string) => {
+    if (!backend) return;
+    setProcessingRequest(senderId);
+    try {
+      const requests = await (backend as any).getPendingFollowRequests();
+      const req = (requests as any[]).find(
+        (r: any) => r.from.toString() === senderId,
+      );
+      if (req) {
+        await (backend as any).declineFollowRequest(req.id);
+        await loadNotifications();
+      }
+    } catch {}
+    setProcessingRequest(null);
+  };
 
   const loadNotifications = useCallback(async () => {
     if (!backend || !isLoggedIn) return;
@@ -287,8 +331,30 @@ export default function InboxPage({
                     <p className="text-xs text-[#8B95A3] mt-0.5">
                       {timeAgo(n.timeMs)}
                     </p>
+                    {n.type === "follow_request" && (
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAcceptFollowRequest(n.senderId)}
+                          disabled={processingRequest === n.senderId}
+                          className="px-3 py-1 rounded-full bg-[#22D3EE] text-black text-xs font-bold disabled:opacity-50"
+                          data-ocid={`inbox.follow_request.accept.${n.id}`}
+                        >
+                          {processingRequest === n.senderId ? "..." : "Accept"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeclineFollowRequest(n.senderId)}
+                          disabled={processingRequest === n.senderId}
+                          className="px-3 py-1 rounded-full border border-[#2A3038] text-[#E9EEF5] text-xs font-bold disabled:opacity-50"
+                          data-ocid={`inbox.follow_request.decline.${n.id}`}
+                        >
+                          Decline
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {!n.read && (
+                  {!n.read && n.type !== "follow_request" && (
                     <div className="w-2.5 h-2.5 rounded-full bg-[#22D3EE] shrink-0" />
                   )}
                 </motion.div>

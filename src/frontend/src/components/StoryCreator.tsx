@@ -18,29 +18,63 @@ export default function StoryCreator({ onClose, onCreated }: Props) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Refs to always get latest values in async context
+  const backendRef = useRef(backend);
+  const photoClientRef = useRef(photoClient);
+  const videoClientRef = useRef(videoStorageClient);
+  backendRef.current = backend;
+  photoClientRef.current = photoClient;
+  videoClientRef.current = videoStorageClient;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
+    setError(null);
     const url = URL.createObjectURL(f);
     setPreviewUrl(url);
   };
 
+  const waitReady = async (isVideo: boolean) => {
+    const deadline = Date.now() + 30000;
+    while (Date.now() < deadline) {
+      const clientReady = isVideo
+        ? videoClientRef.current
+        : photoClientRef.current;
+      if (clientReady && backendRef.current) return true;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    return false;
+  };
+
   const handleSubmit = async () => {
-    if (!file || !backend) return;
+    if (!file) return;
     const isVideo = file.type.startsWith("video");
-    const client = isVideo ? videoStorageClient : photoClient;
-    if (!client) return;
     setUploading(true);
+    setError(null);
     try {
+      const ready = await waitReady(isVideo);
+      if (!ready) {
+        setError("Storage not ready. Please try again.");
+        return;
+      }
+      const client = isVideo ? videoClientRef.current : photoClientRef.current;
+      const be = backendRef.current;
+      if (!client || !be) {
+        setError("Storage not ready. Please try again.");
+        return;
+      }
       const bytes = new Uint8Array(await file.arrayBuffer());
       const { hash: key } = await client.putFile(bytes);
-      await backend.createStory(key, file.type, caption);
+      await be.createStory(key, file.type, caption);
       onCreated();
       onClose();
-    } catch {
-      // silent
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "Upload failed. Please try again.";
+      setError(msg);
     } finally {
       setUploading(false);
     }
@@ -134,6 +168,16 @@ export default function StoryCreator({ onClose, onCreated }: Props) {
           </>
         )}
       </button>
+
+      {/* Inline error message */}
+      {error && (
+        <p
+          className="mt-3 w-full max-w-xs text-center text-xs text-[#FF3B5C] bg-[#FF3B5C]/10 border border-[#FF3B5C]/20 rounded-xl px-3 py-2"
+          data-ocid="story_creator.error_state"
+        >
+          {error}
+        </p>
+      )}
     </motion.div>
   );
 }
