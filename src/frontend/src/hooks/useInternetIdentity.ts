@@ -174,8 +174,10 @@ export function InternetIdentityProvider({
   const handleLoginError = useCallback(
     (maybeError?: string) => {
       setErrorMessage(maybeError ?? "Login failed");
+      // Clear stored identity so next login attempt is clean
+      void authClient?.logout().catch(() => {});
     },
-    [setErrorMessage],
+    [authClient, setErrorMessage],
   );
 
   const login = useCallback(() => {

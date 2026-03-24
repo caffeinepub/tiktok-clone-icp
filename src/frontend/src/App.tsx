@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import VideoUploadModal from "./components/VideoUploadModal";
 import { useBackend } from "./hooks/useBackend";
+import { useInternetIdentity } from "./hooks/useInternetIdentity";
 import { useStorageClient } from "./hooks/useStorageClient";
 import CameraPage from "./pages/CameraPage";
 import ChatPage from "./pages/ChatPage";
@@ -69,6 +70,7 @@ export default function App() {
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const { backend, isLoggedIn, login } = useBackend();
+  const { isLoginError, loginError } = useInternetIdentity();
   const imageStorageClient = useStorageClient("images");
   const videoStorageClient = useStorageClient("videos");
   const _uploadPhotoRef = useRef<((file: File) => Promise<void>) | null>(null);
@@ -231,6 +233,27 @@ export default function App() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="w-full max-w-xs flex flex-col gap-3"
         >
+          <AnimatePresence>
+            {isLoginError && (
+              <motion.div
+                key="auth-error"
+                data-ocid="auth.error_state"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="w-full p-4 rounded-2xl bg-[#FF3B5C]/10 border border-[#FF3B5C]/30"
+              >
+                <p className="text-[#FF3B5C] text-sm font-semibold text-center">
+                  Authentication failed
+                </p>
+                <p className="text-[#FF3B5C]/80 text-xs text-center mt-1">
+                  {loginError?.message?.includes("already authenticated")
+                    ? "Session conflict. Please try again."
+                    : "Please try again — tap Get Started below."}
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <button
             type="button"
             onClick={login}
