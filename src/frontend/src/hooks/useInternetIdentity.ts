@@ -192,8 +192,7 @@ export function InternetIdentityProvider({
       currentIdentity instanceof DelegationIdentity &&
       isDelegationValid(currentIdentity.getDelegation())
     ) {
-      // Already authenticated — proceed directly to home instead of showing an error
-      handleLoginSuccess();
+      setErrorMessage("User is already authenticated");
       return;
     }
 
@@ -237,9 +236,12 @@ export function InternetIdentityProvider({
     void (async () => {
       try {
         setStatus("initializing");
-        const existingClient = await createAuthClient(createOptions);
-        if (cancelled) return;
-        setAuthClient(existingClient);
+        let existingClient = authClient;
+        if (!existingClient) {
+          existingClient = await createAuthClient(createOptions);
+          if (cancelled) return;
+          setAuthClient(existingClient);
+        }
         const isAuthenticated = await existingClient.isAuthenticated();
         if (cancelled) return;
         if (isAuthenticated) {
@@ -260,7 +262,7 @@ export function InternetIdentityProvider({
     return () => {
       cancelled = true;
     };
-  }, [createOptions]);
+  }, [createOptions, authClient]);
 
   const value = useMemo<ProviderValue>(
     () => ({
