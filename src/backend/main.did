@@ -1,0 +1,256 @@
+type _CaffeineStorageRefillResult = 
+ record {
+   success: opt bool;
+   topped_up_amount: opt nat;
+ };
+type _CaffeineStorageRefillInformation = record {
+                                           proposed_top_up_amount: opt nat;};
+type _CaffeineStorageCreateCertificateResult = 
+ record {
+   blob_hash: text;
+   method: text;
+ };
+type Video = 
+ record {
+   createdAt: int;
+   creator: principal;
+   description: text;
+   hashtags: vec text;
+   id: text;
+   thumbnailKey: text;
+   title: text;
+   videoKey: text;
+   views: nat;
+ };
+type UserSettings = 
+ record {
+   isPrivate: bool;
+   notificationsEnabled: bool;
+ };
+type UserRole = 
+ variant {
+   admin;
+   guest;
+   user;
+ };
+type UserProfile = 
+ record {
+   avatarKey: text;
+   bio: text;
+   createdAt: int;
+   "principal": principal;
+   username: text;
+ };
+type StoryReaction = 
+ record {
+   createdAt: int;
+   emoji: text;
+   id: text;
+   storyId: text;
+   user: principal;
+ };
+type StoryComment = 
+ record {
+   author: principal;
+   createdAt: int;
+   id: text;
+   storyId: text;
+   "text": text;
+ };
+type Story = 
+ record {
+   caption: text;
+   createdAt: int;
+   creator: principal;
+   expiresAt: int;
+   id: text;
+   mediaKey: text;
+   mediaType: text;
+ };
+type Post = 
+ record {
+   caption: text;
+   createdAt: int;
+   creator: principal;
+   hashtags: vec text;
+   id: text;
+   imageKey: text;
+ };
+type Notification = 
+ record {
+   createdAt: int;
+   id: text;
+   notifType: text;
+   read: bool;
+   recipient: principal;
+   sender: principal;
+   videoId: opt text;
+ };
+type Message = 
+ record {
+   conversationId: text;
+   createdAt: int;
+   id: text;
+   sender: principal;
+   "text": text;
+ };
+type Match = 
+ record {
+   createdAt: int;
+   id: text;
+   user1: principal;
+   user2: principal;
+ };
+type FollowRequest = 
+ record {
+   createdAt: int;
+   from: principal;
+   id: text;
+   to: principal;
+ };
+type Duet = 
+ record {
+   caption: text;
+   createdAt: int;
+   creator: principal;
+   id: text;
+   originalVideoId: text;
+   thumbnailKey: text;
+   videoKey: text;
+ };
+type Comment = 
+ record {
+   author: principal;
+   createdAt: int;
+   id: text;
+   "text": text;
+   videoId: text;
+ };
+service : {
+  _caffeineStorageBlobIsLive: (hash: blob) -> (bool) query;
+  _caffeineStorageBlobsToDelete: () -> (vec blob) query;
+  _caffeineStorageConfirmBlobDeletion: (blobs: vec blob) -> ();
+  _caffeineStorageCreateCertificate: (blobHash: text) ->
+   (_CaffeineStorageCreateCertificateResult);
+  _caffeineStorageRefillCashier: (refillInformation:
+   opt _CaffeineStorageRefillInformation) -> (_CaffeineStorageRefillResult);
+  _caffeineStorageUpdateGatewayPrincipals: () -> ();
+  _initializeAccessControlWithSecret: (userSecret: text) -> ();
+  acceptFollowRequest: (requestId: text) -> (bool);
+  addComment: (videoId: text, "text": text) -> (text);
+  addPostComment: (postId: text, "text": text) -> (text);
+  addStoryComment: (storyId: text, "text": text) -> (text);
+  addStoryReaction: (storyId: text, emoji: text) -> ();
+  assignCallerUserRole: (user: principal, role: UserRole) -> ();
+  cancelFollowRequest: (target: principal) -> ();
+  createDuet: (originalVideoId: text, videoKey: text, thumbnailKey: text,
+   caption: text) -> (text);
+  createStory: (mediaKey: text, mediaType: text, caption: text) -> (text);
+  declineFollowRequest: (requestId: text) -> (bool);
+  deleteComment: (commentId: text) -> (bool);
+  deleteDuet: (id: text) -> (bool);
+  deletePost: (id: text) -> (bool);
+  deleteStory: (id: text) -> (bool);
+  deleteStoryComment: (commentId: text) -> (bool);
+  deleteVideo: (id: text) -> (bool);
+  didCallerLike: (videoId: text) -> (bool) query;
+  didCallerLikePost: (postId: text) -> (bool) query;
+  followUser: (target: principal) -> ();
+  getActiveStories: () -> (vec Story) query;
+  getAllUsers: () -> (vec UserProfile) query;
+  getCallerUserRole: () -> (UserRole) query;
+  getCandidateDetails: (target: principal) ->
+   (record {
+      followerCount: nat;
+      followingCount: nat;
+      mutualCount: nat;
+      postCount: nat;
+      videoCount: nat;
+    }) query;
+  getComments: (videoId: text) -> (vec Comment) query;
+  getConversations: () ->
+   (vec
+     record {
+       lastMessageAt: int;
+       lastMessageText: text;
+       otherPrincipal: principal;
+     }) query;
+  getCoverPhoto: (p: principal) -> (opt text) query;
+  getDuetsByVideo: (videoId: text) -> (vec Duet) query;
+  getFeed: (offset: nat, limit: nat) -> (vec Video) query;
+  getFollowers: (p: principal) -> (vec principal) query;
+  getFollowing: (p: principal) -> (vec principal) query;
+  getFollowingFeed: (p: principal, offset: nat, limit: nat) ->
+   (vec Video) query;
+  getLikeCount: (videoId: text) -> (nat) query;
+  getLikedVideos: () -> (vec Video) query;
+  getMatches: () -> (vec Match) query;
+  getMessages: (other: principal) -> (vec Message) query;
+  getMutualFollowCount: (other: principal) -> (nat) query;
+  getMutualFollowProfiles: (other: principal) -> (vec UserProfile) query;
+  getMyStoryReaction: (storyId: text) -> (opt StoryReaction) query;
+  getNotifications: () -> (vec Notification) query;
+  getPendingFollowRequests: () -> (vec FollowRequest) query;
+  getPhotoPosts: (offset: nat, limit: nat) -> (vec Post) query;
+  getPinnedVideo: (p: principal) -> (opt Video) query;
+  getPopularFeed: (offset: nat, limit: nat) -> (vec Video) query;
+  getPostById: (id: text) -> (opt Post) query;
+  getPostComments: (postId: text) -> (vec Comment) query;
+  getPostLikeCount: (postId: text) -> (nat) query;
+  getPotentialMatches: () -> (vec UserProfile) query;
+  getProfile: (p: principal) -> (opt UserProfile) query;
+  getSavedVideos: () -> (vec Video) query;
+  getStoriesByUser: (p: principal) -> (vec Story) query;
+  getStoryComments: (storyId: text) -> (vec StoryComment) query;
+  getStoryReactions: (storyId: text) -> (vec StoryReaction) query;
+  getTrendingFeed: (offset: nat, limit: nat) -> (vec Video) query;
+  getUserDuets: (p: principal) -> (vec Duet) query;
+  getUserPhotos: (p: principal) -> (vec Post) query;
+  getUserSettings: () -> (UserSettings) query;
+  getUserStats: (p: principal) ->
+   (record {
+      followerCount: nat;
+      followingCount: nat;
+      videoCount: nat;
+    }) query;
+  getUserVideos: (p: principal) -> (vec Video) query;
+  getVideoById: (id: text) -> (opt Video) query;
+  getViewedStoryIds: () -> (vec text) query;
+  hasPendingFollowRequest: (target: principal) -> (bool) query;
+  hasUnviewedStories: (p: principal) -> (bool) query;
+  hideVideo: (videoId: text) -> ();
+  incrementView: (id: text) -> ();
+  isCallerAdmin: () -> (bool) query;
+  isMatch: (other: principal) -> (bool) query;
+  isVideoSaved: (videoId: text) -> (bool) query;
+  likePost: (postId: text) -> ();
+  likeVideo: (videoId: text) -> ();
+  markNotificationsRead: () -> ();
+  pinVideo: (videoId: text) -> (bool);
+  postPhoto: (imageKey: text, caption: text, hashtags: vec text) -> (text);
+  postVideo: (title: text, description: text, hashtags: vec text, videoKey:
+   text, thumbnailKey: text) -> (text);
+  registerUser: (username: text, bio: text, avatarKey: text) -> ();
+  removeStoryReaction: (storyId: text) -> ();
+  reportVideo: (videoId: text, reason: text) -> ();
+  saveVideo: (videoId: text) -> ();
+  searchPosts: (term: text) -> (vec Post) query;
+  searchUsers: (term: text) -> (vec UserProfile) query;
+  searchVideos: (term: text) -> (vec Video) query;
+  sendFollowRequest: (target: principal) -> ();
+  sendMessage: (recipient: principal, "text": text) -> (bool);
+  swipeLeft: (target: principal) -> ();
+  swipeRight: (target: principal) -> (bool);
+  unfollowUser: (target: principal) -> ();
+  unhideVideo: (videoId: text) -> ();
+  unlikePost: (postId: text) -> ();
+  unlikeVideo: (videoId: text) -> ();
+  unpinVideo: () -> ();
+  unsaveVideo: (videoId: text) -> ();
+  updateCoverPhoto: (coverPhotoKey: text) -> ();
+  updateProfile: (username: text, bio: text, avatarKey: text) -> ();
+  updateUserSettings: (isPrivate: bool, notificationsEnabled: bool) -> ();
+  updateVideo: (id: text, title: text, description: text, hashtags:
+   vec text) -> (bool);
+  viewStory: (id: text) -> ();
+}

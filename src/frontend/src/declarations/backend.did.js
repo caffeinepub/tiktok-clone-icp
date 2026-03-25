@@ -8,10 +8,498 @@
 
 import { IDL } from '@icp-sdk/core/candid';
 
-export const idlService = IDL.Service({});
+const Video = IDL.Record({
+  id: IDL.Text,
+  creator: IDL.Principal,
+  title: IDL.Text,
+  description: IDL.Text,
+  hashtags: IDL.Vec(IDL.Text),
+  videoKey: IDL.Text,
+  thumbnailKey: IDL.Text,
+  createdAt: IDL.Int,
+  views: IDL.Nat,
+});
+
+const Post = IDL.Record({
+  id: IDL.Text,
+  creator: IDL.Principal,
+  imageKey: IDL.Text,
+  caption: IDL.Text,
+  hashtags: IDL.Vec(IDL.Text),
+  createdAt: IDL.Int,
+});
+
+const Comment = IDL.Record({
+  id: IDL.Text,
+  videoId: IDL.Text,
+  author: IDL.Principal,
+  text: IDL.Text,
+  createdAt: IDL.Int,
+});
+
+const Notification = IDL.Record({
+  id: IDL.Text,
+  recipient: IDL.Principal,
+  sender: IDL.Principal,
+  notifType: IDL.Text,
+  videoId: IDL.Opt(IDL.Text),
+  read: IDL.Bool,
+  createdAt: IDL.Int,
+});
+
+const Story = IDL.Record({
+  id: IDL.Text,
+  creator: IDL.Principal,
+  mediaKey: IDL.Text,
+  mediaType: IDL.Text,
+  caption: IDL.Text,
+  createdAt: IDL.Int,
+  expiresAt: IDL.Int,
+});
+
+const StoryReaction = IDL.Record({
+  id: IDL.Text,
+  storyId: IDL.Text,
+  user: IDL.Principal,
+  emoji: IDL.Text,
+  createdAt: IDL.Int,
+});
+
+const StoryComment = IDL.Record({
+  id: IDL.Text,
+  storyId: IDL.Text,
+  author: IDL.Principal,
+  text: IDL.Text,
+  createdAt: IDL.Int,
+});
+
+const UserProfile = IDL.Record({
+  principal: IDL.Principal,
+  username: IDL.Text,
+  bio: IDL.Text,
+  avatarKey: IDL.Text,
+  createdAt: IDL.Int,
+});
+
+const UserSettings = IDL.Record({
+  isPrivate: IDL.Bool,
+  notificationsEnabled: IDL.Bool,
+});
+
+const FollowRequest = IDL.Record({
+  id: IDL.Text,
+  from: IDL.Principal,
+  to: IDL.Principal,
+  createdAt: IDL.Int,
+});
+
+const Match = IDL.Record({
+  id: IDL.Text,
+  user1: IDL.Principal,
+  user2: IDL.Principal,
+  createdAt: IDL.Int,
+});
+
+const Message = IDL.Record({
+  id: IDL.Text,
+  conversationId: IDL.Text,
+  sender: IDL.Principal,
+  text: IDL.Text,
+  createdAt: IDL.Int,
+});
+
+const Duet = IDL.Record({
+  id: IDL.Text,
+  originalVideoId: IDL.Text,
+  creator: IDL.Principal,
+  videoKey: IDL.Text,
+  thumbnailKey: IDL.Text,
+  caption: IDL.Text,
+  createdAt: IDL.Int,
+});
+
+const UserRole = IDL.Variant({
+  admin: IDL.Null,
+  user: IDL.Null,
+  guest: IDL.Null,
+});
+
+const UserStats = IDL.Record({
+  videoCount: IDL.Nat,
+  followerCount: IDL.Nat,
+  followingCount: IDL.Nat,
+});
+
+const CandidateDetails = IDL.Record({
+  followerCount: IDL.Nat,
+  followingCount: IDL.Nat,
+  videoCount: IDL.Nat,
+  postCount: IDL.Nat,
+  mutualCount: IDL.Nat,
+});
+
+const Conversation = IDL.Record({
+  otherPrincipal: IDL.Principal,
+  lastMessageText: IDL.Text,
+  lastMessageAt: IDL.Int,
+});
+
+const _CaffeineStorageRefillInformation = IDL.Record({
+  proposed_top_up_amount: IDL.Opt(IDL.Nat),
+});
+
+const _CaffeineStorageRefillResult = IDL.Record({
+  success: IDL.Opt(IDL.Bool),
+  topped_up_amount: IDL.Opt(IDL.Nat),
+});
+
+const _CaffeineStorageCreateCertificateResult = IDL.Record({
+  blob_hash: IDL.Text,
+  method: IDL.Text,
+});
+
+export const idlService = IDL.Service({
+  _initializeAccessControlWithSecret: IDL.Func([IDL.Text], [], []),
+  _caffeineStorageBlobIsLive: IDL.Func([IDL.Vec(IDL.Nat8)], [IDL.Bool], ['query']),
+  _caffeineStorageBlobsToDelete: IDL.Func([], [IDL.Vec(IDL.Vec(IDL.Nat8))], ['query']),
+  _caffeineStorageConfirmBlobDeletion: IDL.Func([IDL.Vec(IDL.Vec(IDL.Nat8))], [], []),
+  _caffeineStorageCreateCertificate: IDL.Func([IDL.Text], [_CaffeineStorageCreateCertificateResult], []),
+  _caffeineStorageRefillCashier: IDL.Func([IDL.Opt(_CaffeineStorageRefillInformation)], [_CaffeineStorageRefillResult], []),
+  _caffeineStorageUpdateGatewayPrincipals: IDL.Func([], [], []),
+  registerUser: IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  getProfile: IDL.Func([IDL.Principal], [IDL.Opt(UserProfile)], ['query']),
+  updateProfile: IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+  updateCoverPhoto: IDL.Func([IDL.Text], [], []),
+  getCoverPhoto: IDL.Func([IDL.Principal], [IDL.Opt(IDL.Text)], ['query']),
+  followUser: IDL.Func([IDL.Principal], [], []),
+  unfollowUser: IDL.Func([IDL.Principal], [], []),
+  getFollowing: IDL.Func([IDL.Principal], [IDL.Vec(IDL.Principal)], ['query']),
+  getFollowers: IDL.Func([IDL.Principal], [IDL.Vec(IDL.Principal)], ['query']),
+  getUserStats: IDL.Func([IDL.Principal], [UserStats], ['query']),
+  getAllUsers: IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
+  sendFollowRequest: IDL.Func([IDL.Principal], [], []),
+  acceptFollowRequest: IDL.Func([IDL.Text], [IDL.Bool], []),
+  declineFollowRequest: IDL.Func([IDL.Text], [IDL.Bool], []),
+  cancelFollowRequest: IDL.Func([IDL.Principal], [], []),
+  getPendingFollowRequests: IDL.Func([], [IDL.Vec(FollowRequest)], ['query']),
+  hasPendingFollowRequest: IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
+  getUserSettings: IDL.Func([], [UserSettings], ['query']),
+  updateUserSettings: IDL.Func([IDL.Bool, IDL.Bool], [], []),
+  postVideo: IDL.Func([IDL.Text, IDL.Text, IDL.Vec(IDL.Text), IDL.Text, IDL.Text], [IDL.Text], []),
+  getFeed: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+  getFollowingFeed: IDL.Func([IDL.Principal, IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+  getTrendingFeed: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+  getPopularFeed: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+  getUserVideos: IDL.Func([IDL.Principal], [IDL.Vec(Video)], ['query']),
+  getVideoById: IDL.Func([IDL.Text], [IDL.Opt(Video)], ['query']),
+  deleteVideo: IDL.Func([IDL.Text], [IDL.Bool], []),
+  updateVideo: IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Vec(IDL.Text)], [IDL.Bool], []),
+  incrementView: IDL.Func([IDL.Text], [], []),
+  postPhoto: IDL.Func([IDL.Text, IDL.Text, IDL.Vec(IDL.Text)], [IDL.Text], []),
+  getPhotoPosts: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Post)], ['query']),
+  getUserPhotos: IDL.Func([IDL.Principal], [IDL.Vec(Post)], ['query']),
+  getPostById: IDL.Func([IDL.Text], [IDL.Opt(Post)], ['query']),
+  deletePost: IDL.Func([IDL.Text], [IDL.Bool], []),
+  likePost: IDL.Func([IDL.Text], [], []),
+  unlikePost: IDL.Func([IDL.Text], [], []),
+  getPostLikeCount: IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+  didCallerLikePost: IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+  addPostComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  getPostComments: IDL.Func([IDL.Text], [IDL.Vec(Comment)], ['query']),
+  searchPosts: IDL.Func([IDL.Text], [IDL.Vec(Post)], ['query']),
+  saveVideo: IDL.Func([IDL.Text], [], []),
+  unsaveVideo: IDL.Func([IDL.Text], [], []),
+  getSavedVideos: IDL.Func([], [IDL.Vec(Video)], ['query']),
+  isVideoSaved: IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+  getLikedVideos: IDL.Func([], [IDL.Vec(Video)], ['query']),
+  hideVideo: IDL.Func([IDL.Text], [], []),
+  unhideVideo: IDL.Func([IDL.Text], [], []),
+  pinVideo: IDL.Func([IDL.Text], [IDL.Bool], []),
+  unpinVideo: IDL.Func([], [], []),
+  getPinnedVideo: IDL.Func([IDL.Principal], [IDL.Opt(Video)], ['query']),
+  reportVideo: IDL.Func([IDL.Text, IDL.Text], [], []),
+  likeVideo: IDL.Func([IDL.Text], [], []),
+  unlikeVideo: IDL.Func([IDL.Text], [], []),
+  getLikeCount: IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+  didCallerLike: IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+  addComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  getComments: IDL.Func([IDL.Text], [IDL.Vec(Comment)], ['query']),
+  deleteComment: IDL.Func([IDL.Text], [IDL.Bool], []),
+  searchVideos: IDL.Func([IDL.Text], [IDL.Vec(Video)], ['query']),
+  searchUsers: IDL.Func([IDL.Text], [IDL.Vec(UserProfile)], ['query']),
+  getNotifications: IDL.Func([], [IDL.Vec(Notification)], ['query']),
+  markNotificationsRead: IDL.Func([], [], []),
+  createStory: IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Text], []),
+  getActiveStories: IDL.Func([], [IDL.Vec(Story)], ['query']),
+  getStoriesByUser: IDL.Func([IDL.Principal], [IDL.Vec(Story)], ['query']),
+  deleteStory: IDL.Func([IDL.Text], [IDL.Bool], []),
+  viewStory: IDL.Func([IDL.Text], [], []),
+  getViewedStoryIds: IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+  hasUnviewedStories: IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
+  addStoryReaction: IDL.Func([IDL.Text, IDL.Text], [], []),
+  removeStoryReaction: IDL.Func([IDL.Text], [], []),
+  getStoryReactions: IDL.Func([IDL.Text], [IDL.Vec(StoryReaction)], ['query']),
+  getMyStoryReaction: IDL.Func([IDL.Text], [IDL.Opt(StoryReaction)], ['query']),
+  swipeRight: IDL.Func([IDL.Principal], [IDL.Bool], []),
+  swipeLeft: IDL.Func([IDL.Principal], [], []),
+  getMatches: IDL.Func([], [IDL.Vec(Match)], ['query']),
+  getPotentialMatches: IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
+  isMatch: IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
+  getMutualFollowCount: IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
+  getMutualFollowProfiles: IDL.Func([IDL.Principal], [IDL.Vec(UserProfile)], ['query']),
+  getCandidateDetails: IDL.Func([IDL.Principal], [CandidateDetails], ['query']),
+  sendMessage: IDL.Func([IDL.Principal, IDL.Text], [IDL.Bool], []),
+  getMessages: IDL.Func([IDL.Principal], [IDL.Vec(Message)], ['query']),
+  getConversations: IDL.Func([], [IDL.Vec(Conversation)], ['query']),
+  createDuet: IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text], [IDL.Text], []),
+  getDuetsByVideo: IDL.Func([IDL.Text], [IDL.Vec(Duet)], ['query']),
+  getUserDuets: IDL.Func([IDL.Principal], [IDL.Vec(Duet)], ['query']),
+  deleteDuet: IDL.Func([IDL.Text], [IDL.Bool], []),
+  addStoryComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+  getStoryComments: IDL.Func([IDL.Text], [IDL.Vec(StoryComment)], ['query']),
+  deleteStoryComment: IDL.Func([IDL.Text], [IDL.Bool], []),
+  getCallerUserRole: IDL.Func([], [UserRole], ['query']),
+  isCallerAdmin: IDL.Func([], [IDL.Bool], ['query']),
+  assignCallerUserRole: IDL.Func([IDL.Principal, UserRole], [], []),
+});
 
 export const idlInitArgs = [];
 
-export const idlFactory = ({ IDL }) => { return IDL.Service({}); };
+export const idlFactory = ({ IDL }) => {
+  const Video = IDL.Record({
+    id: IDL.Text,
+    creator: IDL.Principal,
+    title: IDL.Text,
+    description: IDL.Text,
+    hashtags: IDL.Vec(IDL.Text),
+    videoKey: IDL.Text,
+    thumbnailKey: IDL.Text,
+    createdAt: IDL.Int,
+    views: IDL.Nat,
+  });
+  const Post = IDL.Record({
+    id: IDL.Text,
+    creator: IDL.Principal,
+    imageKey: IDL.Text,
+    caption: IDL.Text,
+    hashtags: IDL.Vec(IDL.Text),
+    createdAt: IDL.Int,
+  });
+  const Comment = IDL.Record({
+    id: IDL.Text,
+    videoId: IDL.Text,
+    author: IDL.Principal,
+    text: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const Notification = IDL.Record({
+    id: IDL.Text,
+    recipient: IDL.Principal,
+    sender: IDL.Principal,
+    notifType: IDL.Text,
+    videoId: IDL.Opt(IDL.Text),
+    read: IDL.Bool,
+    createdAt: IDL.Int,
+  });
+  const Story = IDL.Record({
+    id: IDL.Text,
+    creator: IDL.Principal,
+    mediaKey: IDL.Text,
+    mediaType: IDL.Text,
+    caption: IDL.Text,
+    createdAt: IDL.Int,
+    expiresAt: IDL.Int,
+  });
+  const StoryReaction = IDL.Record({
+    id: IDL.Text,
+    storyId: IDL.Text,
+    user: IDL.Principal,
+    emoji: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const StoryComment = IDL.Record({
+    id: IDL.Text,
+    storyId: IDL.Text,
+    author: IDL.Principal,
+    text: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const UserProfile = IDL.Record({
+    principal: IDL.Principal,
+    username: IDL.Text,
+    bio: IDL.Text,
+    avatarKey: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const UserSettings = IDL.Record({
+    isPrivate: IDL.Bool,
+    notificationsEnabled: IDL.Bool,
+  });
+  const FollowRequest = IDL.Record({
+    id: IDL.Text,
+    from: IDL.Principal,
+    to: IDL.Principal,
+    createdAt: IDL.Int,
+  });
+  const Match = IDL.Record({
+    id: IDL.Text,
+    user1: IDL.Principal,
+    user2: IDL.Principal,
+    createdAt: IDL.Int,
+  });
+  const Message = IDL.Record({
+    id: IDL.Text,
+    conversationId: IDL.Text,
+    sender: IDL.Principal,
+    text: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const Duet = IDL.Record({
+    id: IDL.Text,
+    originalVideoId: IDL.Text,
+    creator: IDL.Principal,
+    videoKey: IDL.Text,
+    thumbnailKey: IDL.Text,
+    caption: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const UserRole = IDL.Variant({
+    admin: IDL.Null,
+    user: IDL.Null,
+    guest: IDL.Null,
+  });
+  const UserStats = IDL.Record({
+    videoCount: IDL.Nat,
+    followerCount: IDL.Nat,
+    followingCount: IDL.Nat,
+  });
+  const CandidateDetails = IDL.Record({
+    followerCount: IDL.Nat,
+    followingCount: IDL.Nat,
+    videoCount: IDL.Nat,
+    postCount: IDL.Nat,
+    mutualCount: IDL.Nat,
+  });
+  const Conversation = IDL.Record({
+    otherPrincipal: IDL.Principal,
+    lastMessageText: IDL.Text,
+    lastMessageAt: IDL.Int,
+  });
+  const _CaffeineStorageRefillInformation = IDL.Record({
+    proposed_top_up_amount: IDL.Opt(IDL.Nat),
+  });
+  const _CaffeineStorageRefillResult = IDL.Record({
+    success: IDL.Opt(IDL.Bool),
+    topped_up_amount: IDL.Opt(IDL.Nat),
+  });
+  const _CaffeineStorageCreateCertificateResult = IDL.Record({
+    blob_hash: IDL.Text,
+    method: IDL.Text,
+  });
+  return IDL.Service({
+    _initializeAccessControlWithSecret: IDL.Func([IDL.Text], [], []),
+    _caffeineStorageBlobIsLive: IDL.Func([IDL.Vec(IDL.Nat8)], [IDL.Bool], ['query']),
+    _caffeineStorageBlobsToDelete: IDL.Func([], [IDL.Vec(IDL.Vec(IDL.Nat8))], ['query']),
+    _caffeineStorageConfirmBlobDeletion: IDL.Func([IDL.Vec(IDL.Vec(IDL.Nat8))], [], []),
+    _caffeineStorageCreateCertificate: IDL.Func([IDL.Text], [_CaffeineStorageCreateCertificateResult], []),
+    _caffeineStorageRefillCashier: IDL.Func([IDL.Opt(_CaffeineStorageRefillInformation)], [_CaffeineStorageRefillResult], []),
+    _caffeineStorageUpdateGatewayPrincipals: IDL.Func([], [], []),
+    registerUser: IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    getProfile: IDL.Func([IDL.Principal], [IDL.Opt(UserProfile)], ['query']),
+    updateProfile: IDL.Func([IDL.Text, IDL.Text, IDL.Text], [], []),
+    updateCoverPhoto: IDL.Func([IDL.Text], [], []),
+    getCoverPhoto: IDL.Func([IDL.Principal], [IDL.Opt(IDL.Text)], ['query']),
+    followUser: IDL.Func([IDL.Principal], [], []),
+    unfollowUser: IDL.Func([IDL.Principal], [], []),
+    getFollowing: IDL.Func([IDL.Principal], [IDL.Vec(IDL.Principal)], ['query']),
+    getFollowers: IDL.Func([IDL.Principal], [IDL.Vec(IDL.Principal)], ['query']),
+    getUserStats: IDL.Func([IDL.Principal], [UserStats], ['query']),
+    getAllUsers: IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
+    sendFollowRequest: IDL.Func([IDL.Principal], [], []),
+    acceptFollowRequest: IDL.Func([IDL.Text], [IDL.Bool], []),
+    declineFollowRequest: IDL.Func([IDL.Text], [IDL.Bool], []),
+    cancelFollowRequest: IDL.Func([IDL.Principal], [], []),
+    getPendingFollowRequests: IDL.Func([], [IDL.Vec(FollowRequest)], ['query']),
+    hasPendingFollowRequest: IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
+    getUserSettings: IDL.Func([], [UserSettings], ['query']),
+    updateUserSettings: IDL.Func([IDL.Bool, IDL.Bool], [], []),
+    postVideo: IDL.Func([IDL.Text, IDL.Text, IDL.Vec(IDL.Text), IDL.Text, IDL.Text], [IDL.Text], []),
+    getFeed: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+    getFollowingFeed: IDL.Func([IDL.Principal, IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+    getTrendingFeed: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+    getPopularFeed: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Video)], ['query']),
+    getUserVideos: IDL.Func([IDL.Principal], [IDL.Vec(Video)], ['query']),
+    getVideoById: IDL.Func([IDL.Text], [IDL.Opt(Video)], ['query']),
+    deleteVideo: IDL.Func([IDL.Text], [IDL.Bool], []),
+    updateVideo: IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Vec(IDL.Text)], [IDL.Bool], []),
+    incrementView: IDL.Func([IDL.Text], [], []),
+    postPhoto: IDL.Func([IDL.Text, IDL.Text, IDL.Vec(IDL.Text)], [IDL.Text], []),
+    getPhotoPosts: IDL.Func([IDL.Nat, IDL.Nat], [IDL.Vec(Post)], ['query']),
+    getUserPhotos: IDL.Func([IDL.Principal], [IDL.Vec(Post)], ['query']),
+    getPostById: IDL.Func([IDL.Text], [IDL.Opt(Post)], ['query']),
+    deletePost: IDL.Func([IDL.Text], [IDL.Bool], []),
+    likePost: IDL.Func([IDL.Text], [], []),
+    unlikePost: IDL.Func([IDL.Text], [], []),
+    getPostLikeCount: IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+    didCallerLikePost: IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+    addPostComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    getPostComments: IDL.Func([IDL.Text], [IDL.Vec(Comment)], ['query']),
+    searchPosts: IDL.Func([IDL.Text], [IDL.Vec(Post)], ['query']),
+    saveVideo: IDL.Func([IDL.Text], [], []),
+    unsaveVideo: IDL.Func([IDL.Text], [], []),
+    getSavedVideos: IDL.Func([], [IDL.Vec(Video)], ['query']),
+    isVideoSaved: IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+    getLikedVideos: IDL.Func([], [IDL.Vec(Video)], ['query']),
+    hideVideo: IDL.Func([IDL.Text], [], []),
+    unhideVideo: IDL.Func([IDL.Text], [], []),
+    pinVideo: IDL.Func([IDL.Text], [IDL.Bool], []),
+    unpinVideo: IDL.Func([], [], []),
+    getPinnedVideo: IDL.Func([IDL.Principal], [IDL.Opt(Video)], ['query']),
+    reportVideo: IDL.Func([IDL.Text, IDL.Text], [], []),
+    likeVideo: IDL.Func([IDL.Text], [], []),
+    unlikeVideo: IDL.Func([IDL.Text], [], []),
+    getLikeCount: IDL.Func([IDL.Text], [IDL.Nat], ['query']),
+    didCallerLike: IDL.Func([IDL.Text], [IDL.Bool], ['query']),
+    addComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    getComments: IDL.Func([IDL.Text], [IDL.Vec(Comment)], ['query']),
+    deleteComment: IDL.Func([IDL.Text], [IDL.Bool], []),
+    searchVideos: IDL.Func([IDL.Text], [IDL.Vec(Video)], ['query']),
+    searchUsers: IDL.Func([IDL.Text], [IDL.Vec(UserProfile)], ['query']),
+    getNotifications: IDL.Func([], [IDL.Vec(Notification)], ['query']),
+    markNotificationsRead: IDL.Func([], [], []),
+    createStory: IDL.Func([IDL.Text, IDL.Text, IDL.Text], [IDL.Text], []),
+    getActiveStories: IDL.Func([], [IDL.Vec(Story)], ['query']),
+    getStoriesByUser: IDL.Func([IDL.Principal], [IDL.Vec(Story)], ['query']),
+    deleteStory: IDL.Func([IDL.Text], [IDL.Bool], []),
+    viewStory: IDL.Func([IDL.Text], [], []),
+    getViewedStoryIds: IDL.Func([], [IDL.Vec(IDL.Text)], ['query']),
+    hasUnviewedStories: IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
+    addStoryReaction: IDL.Func([IDL.Text, IDL.Text], [], []),
+    removeStoryReaction: IDL.Func([IDL.Text], [], []),
+    getStoryReactions: IDL.Func([IDL.Text], [IDL.Vec(StoryReaction)], ['query']),
+    getMyStoryReaction: IDL.Func([IDL.Text], [IDL.Opt(StoryReaction)], ['query']),
+    swipeRight: IDL.Func([IDL.Principal], [IDL.Bool], []),
+    swipeLeft: IDL.Func([IDL.Principal], [], []),
+    getMatches: IDL.Func([], [IDL.Vec(Match)], ['query']),
+    getPotentialMatches: IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
+    isMatch: IDL.Func([IDL.Principal], [IDL.Bool], ['query']),
+    getMutualFollowCount: IDL.Func([IDL.Principal], [IDL.Nat], ['query']),
+    getMutualFollowProfiles: IDL.Func([IDL.Principal], [IDL.Vec(UserProfile)], ['query']),
+    getCandidateDetails: IDL.Func([IDL.Principal], [CandidateDetails], ['query']),
+    sendMessage: IDL.Func([IDL.Principal, IDL.Text], [IDL.Bool], []),
+    getMessages: IDL.Func([IDL.Principal], [IDL.Vec(Message)], ['query']),
+    getConversations: IDL.Func([], [IDL.Vec(Conversation)], ['query']),
+    createDuet: IDL.Func([IDL.Text, IDL.Text, IDL.Text, IDL.Text], [IDL.Text], []),
+    getDuetsByVideo: IDL.Func([IDL.Text], [IDL.Vec(Duet)], ['query']),
+    getUserDuets: IDL.Func([IDL.Principal], [IDL.Vec(Duet)], ['query']),
+    deleteDuet: IDL.Func([IDL.Text], [IDL.Bool], []),
+    addStoryComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
+    getStoryComments: IDL.Func([IDL.Text], [IDL.Vec(StoryComment)], ['query']),
+    deleteStoryComment: IDL.Func([IDL.Text], [IDL.Bool], []),
+    getCallerUserRole: IDL.Func([], [UserRole], ['query']),
+    isCallerAdmin: IDL.Func([], [IDL.Bool], ['query']),
+    assignCallerUserRole: IDL.Func([IDL.Principal, UserRole], [], []),
+  });
+};
 
 export const init = ({ IDL }) => { return []; };

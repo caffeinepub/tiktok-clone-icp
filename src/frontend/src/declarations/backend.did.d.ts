@@ -10,7 +10,219 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
-export interface _SERVICE {}
+export interface Video {
+  id: string;
+  creator: Principal;
+  title: string;
+  description: string;
+  hashtags: string[];
+  videoKey: string;
+  thumbnailKey: string;
+  createdAt: bigint;
+  views: bigint;
+}
+export interface Post {
+  id: string;
+  creator: Principal;
+  imageKey: string;
+  caption: string;
+  hashtags: string[];
+  createdAt: bigint;
+}
+export interface Comment {
+  id: string;
+  videoId: string;
+  author: Principal;
+  text: string;
+  createdAt: bigint;
+}
+export interface Notification {
+  id: string;
+  recipient: Principal;
+  sender: Principal;
+  notifType: string;
+  videoId: [] | [string];
+  read: boolean;
+  createdAt: bigint;
+}
+export interface Story {
+  id: string;
+  creator: Principal;
+  mediaKey: string;
+  mediaType: string;
+  caption: string;
+  createdAt: bigint;
+  expiresAt: bigint;
+}
+export interface StoryReaction {
+  id: string;
+  storyId: string;
+  user: Principal;
+  emoji: string;
+  createdAt: bigint;
+}
+export interface StoryComment {
+  id: string;
+  storyId: string;
+  author: Principal;
+  text: string;
+  createdAt: bigint;
+}
+export interface UserProfile {
+  principal: Principal;
+  username: string;
+  bio: string;
+  avatarKey: string;
+  createdAt: bigint;
+}
+export interface UserSettings {
+  isPrivate: boolean;
+  notificationsEnabled: boolean;
+}
+export interface FollowRequest {
+  id: string;
+  from: Principal;
+  to: Principal;
+  createdAt: bigint;
+}
+export interface Match {
+  id: string;
+  user1: Principal;
+  user2: Principal;
+  createdAt: bigint;
+}
+export interface Message {
+  id: string;
+  conversationId: string;
+  sender: Principal;
+  text: string;
+  createdAt: bigint;
+}
+export interface Duet {
+  id: string;
+  originalVideoId: string;
+  creator: Principal;
+  videoKey: string;
+  thumbnailKey: string;
+  caption: string;
+  createdAt: bigint;
+}
+export type UserRole = { admin: null } | { user: null } | { guest: null };
+export interface UserStats {
+  videoCount: bigint;
+  followerCount: bigint;
+  followingCount: bigint;
+}
+export interface CandidateDetails {
+  followerCount: bigint;
+  followingCount: bigint;
+  videoCount: bigint;
+  postCount: bigint;
+  mutualCount: bigint;
+}
+export interface Conversation {
+  otherPrincipal: Principal;
+  lastMessageText: string;
+  lastMessageAt: bigint;
+}
+export interface _SERVICE {
+  _initializeAccessControlWithSecret: ActorMethod<[string], void>;
+  registerUser: ActorMethod<[string, string, string], void>;
+  getProfile: ActorMethod<[Principal], [] | [UserProfile]>;
+  updateProfile: ActorMethod<[string, string, string], void>;
+  updateCoverPhoto: ActorMethod<[string], void>;
+  getCoverPhoto: ActorMethod<[Principal], [] | [string]>;
+  followUser: ActorMethod<[Principal], void>;
+  unfollowUser: ActorMethod<[Principal], void>;
+  getFollowing: ActorMethod<[Principal], Principal[]>;
+  getFollowers: ActorMethod<[Principal], Principal[]>;
+  getUserStats: ActorMethod<[Principal], UserStats>;
+  getAllUsers: ActorMethod<[], UserProfile[]>;
+  sendFollowRequest: ActorMethod<[Principal], void>;
+  acceptFollowRequest: ActorMethod<[string], boolean>;
+  declineFollowRequest: ActorMethod<[string], boolean>;
+  cancelFollowRequest: ActorMethod<[Principal], void>;
+  getPendingFollowRequests: ActorMethod<[], FollowRequest[]>;
+  hasPendingFollowRequest: ActorMethod<[Principal], boolean>;
+  getUserSettings: ActorMethod<[], UserSettings>;
+  updateUserSettings: ActorMethod<[boolean, boolean], void>;
+  postVideo: ActorMethod<[string, string, string[], string, string], string>;
+  getFeed: ActorMethod<[bigint, bigint], Video[]>;
+  getFollowingFeed: ActorMethod<[Principal, bigint, bigint], Video[]>;
+  getTrendingFeed: ActorMethod<[bigint, bigint], Video[]>;
+  getPopularFeed: ActorMethod<[bigint, bigint], Video[]>;
+  getUserVideos: ActorMethod<[Principal], Video[]>;
+  getVideoById: ActorMethod<[string], [] | [Video]>;
+  deleteVideo: ActorMethod<[string], boolean>;
+  updateVideo: ActorMethod<[string, string, string, string[]], boolean>;
+  incrementView: ActorMethod<[string], void>;
+  postPhoto: ActorMethod<[string, string, string[]], string>;
+  getPhotoPosts: ActorMethod<[bigint, bigint], Post[]>;
+  getUserPhotos: ActorMethod<[Principal], Post[]>;
+  getPostById: ActorMethod<[string], [] | [Post]>;
+  deletePost: ActorMethod<[string], boolean>;
+  likePost: ActorMethod<[string], void>;
+  unlikePost: ActorMethod<[string], void>;
+  getPostLikeCount: ActorMethod<[string], bigint>;
+  didCallerLikePost: ActorMethod<[string], boolean>;
+  addPostComment: ActorMethod<[string, string], string>;
+  getPostComments: ActorMethod<[string], Comment[]>;
+  searchPosts: ActorMethod<[string], Post[]>;
+  saveVideo: ActorMethod<[string], void>;
+  unsaveVideo: ActorMethod<[string], void>;
+  getSavedVideos: ActorMethod<[], Video[]>;
+  isVideoSaved: ActorMethod<[string], boolean>;
+  getLikedVideos: ActorMethod<[], Video[]>;
+  hideVideo: ActorMethod<[string], void>;
+  unhideVideo: ActorMethod<[string], void>;
+  pinVideo: ActorMethod<[string], boolean>;
+  unpinVideo: ActorMethod<[], void>;
+  getPinnedVideo: ActorMethod<[Principal], [] | [Video]>;
+  reportVideo: ActorMethod<[string, string], void>;
+  likeVideo: ActorMethod<[string], void>;
+  unlikeVideo: ActorMethod<[string], void>;
+  getLikeCount: ActorMethod<[string], bigint>;
+  didCallerLike: ActorMethod<[string], boolean>;
+  addComment: ActorMethod<[string, string], string>;
+  getComments: ActorMethod<[string], Comment[]>;
+  deleteComment: ActorMethod<[string], boolean>;
+  searchVideos: ActorMethod<[string], Video[]>;
+  searchUsers: ActorMethod<[string], UserProfile[]>;
+  getNotifications: ActorMethod<[], Notification[]>;
+  markNotificationsRead: ActorMethod<[], void>;
+  createStory: ActorMethod<[string, string, string], string>;
+  getActiveStories: ActorMethod<[], Story[]>;
+  getStoriesByUser: ActorMethod<[Principal], Story[]>;
+  deleteStory: ActorMethod<[string], boolean>;
+  viewStory: ActorMethod<[string], void>;
+  getViewedStoryIds: ActorMethod<[], string[]>;
+  hasUnviewedStories: ActorMethod<[Principal], boolean>;
+  addStoryReaction: ActorMethod<[string, string], void>;
+  removeStoryReaction: ActorMethod<[string], void>;
+  getStoryReactions: ActorMethod<[string], StoryReaction[]>;
+  getMyStoryReaction: ActorMethod<[string], [] | [StoryReaction]>;
+  swipeRight: ActorMethod<[Principal], boolean>;
+  swipeLeft: ActorMethod<[Principal], void>;
+  getMatches: ActorMethod<[], Match[]>;
+  getPotentialMatches: ActorMethod<[], UserProfile[]>;
+  isMatch: ActorMethod<[Principal], boolean>;
+  getMutualFollowCount: ActorMethod<[Principal], bigint>;
+  getMutualFollowProfiles: ActorMethod<[Principal], UserProfile[]>;
+  getCandidateDetails: ActorMethod<[Principal], CandidateDetails>;
+  sendMessage: ActorMethod<[Principal, string], boolean>;
+  getMessages: ActorMethod<[Principal], Message[]>;
+  getConversations: ActorMethod<[], Conversation[]>;
+  createDuet: ActorMethod<[string, string, string, string], string>;
+  getDuetsByVideo: ActorMethod<[string], Duet[]>;
+  getUserDuets: ActorMethod<[Principal], Duet[]>;
+  deleteDuet: ActorMethod<[string], boolean>;
+  addStoryComment: ActorMethod<[string, string], string>;
+  getStoryComments: ActorMethod<[string], StoryComment[]>;
+  deleteStoryComment: ActorMethod<[string], boolean>;
+  getCallerUserRole: ActorMethod<[], UserRole>;
+  isCallerAdmin: ActorMethod<[], boolean>;
+  assignCallerUserRole: ActorMethod<[Principal, UserRole], void>;
+}
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];
 export declare const idlFactory: IDL.InterfaceFactory;
