@@ -174,10 +174,8 @@ export function InternetIdentityProvider({
   const handleLoginError = useCallback(
     (maybeError?: string) => {
       setErrorMessage(maybeError ?? "Login failed");
-      // Clear stored identity so next login attempt is clean
-      void authClient?.logout().catch(() => {});
     },
-    [authClient, setErrorMessage],
+    [setErrorMessage],
   );
 
   const login = useCallback(() => {
@@ -194,7 +192,9 @@ export function InternetIdentityProvider({
       currentIdentity instanceof DelegationIdentity &&
       isDelegationValid(currentIdentity.getDelegation())
     ) {
-      setErrorMessage("User is already authenticated");
+      // User already has a valid session — treat as success instead of error
+      setIdentity(currentIdentity);
+      setStatus("success");
       return;
     }
 
