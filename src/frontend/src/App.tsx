@@ -27,8 +27,8 @@ interface ChatState {
 /** Wait up to `timeoutMs` for a value supplier to return non-null/undefined. */
 function waitForValue<T>(
   getValue: () => T | null | undefined,
-  timeoutMs = 30000,
-  intervalMs = 200,
+  timeoutMs = 15000,
+  intervalMs = 100,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
     const v = getValue();

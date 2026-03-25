@@ -513,6 +513,11 @@ export default function ProfilePage({
               bio: "VibeFlow creator",
               avatar: `https://i.pravatar.cc/100?u=${myPrincipal.toString()}`,
             });
+            // Auto-register user so profile is persisted
+            const defaultUsername = myPrincipal.toString().slice(0, 8);
+            backend
+              .registerUser(defaultUsername, "VibeFlow creator", "")
+              .catch(() => {});
           }
           const resolved = await resolveVideos(
             videos as any[],

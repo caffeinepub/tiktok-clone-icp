@@ -192,7 +192,8 @@ export function InternetIdentityProvider({
       currentIdentity instanceof DelegationIdentity &&
       isDelegationValid(currentIdentity.getDelegation())
     ) {
-      setErrorMessage("User is already authenticated");
+      setIdentity(currentIdentity);
+      setStatus("success");
       return;
     }
 
@@ -231,6 +232,7 @@ export function InternetIdentityProvider({
       });
   }, [authClient, setErrorMessage]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally omit authClient to prevent re-init loop
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -262,7 +264,7 @@ export function InternetIdentityProvider({
     return () => {
       cancelled = true;
     };
-  }, [createOptions, authClient]);
+  }, [createOptions]);
 
   const value = useMemo<ProviderValue>(
     () => ({

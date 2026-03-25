@@ -3,7 +3,7 @@ import { IDL } from "@icp-sdk/core/candid";
 
 type Headers = Record<string, string>;
 
-const MAXIMUM_CONCURRENT_UPLOADS = 10;
+const MAXIMUM_CONCURRENT_UPLOADS = 20;
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30000;
@@ -489,10 +489,28 @@ export class StorageClient {
     });
     const respone = result.response.body;
     if (isV3ResponseBody(respone)) {
-      console.log("Certificate:", respone.certificate);
       return respone.certificate;
     }
-    throw new Error("Expected v3 response body");
+    // v2 fallback: decode candid-encoded blob from reply
+    const v2Body = respone as any;
+    const replyArg = v2Body?.reply?.arg ?? (result as any)?.reply;
+    if (replyArg) {
+      try {
+        const decoded = IDL.decode(
+          [IDL.Vec(IDL.Nat8)],
+          replyArg instanceof Uint8Array ? replyArg : new Uint8Array(replyArg),
+        );
+        const arr = decoded[0];
+        if (arr) return new Uint8Array(arr as number[]);
+      } catch (e) {
+        console.warn("v2 certificate decode failed:", e);
+      }
+    }
+    // Last resort: try treating the entire body as the certificate
+    if (v2Body instanceof Uint8Array && v2Body.length > 0) {
+      return v2Body;
+    }
+    throw new Error("Could not obtain storage certificate. Please retry.");
   }
 
   public async putFile(
