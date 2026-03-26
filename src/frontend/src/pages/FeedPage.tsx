@@ -1,7 +1,6 @@
 import {
   Bookmark,
   Compass,
-  Flame,
   Heart,
   MessageCircle,
   MoreVertical,
@@ -10,8 +9,6 @@ import {
   Play,
   Share2,
   Star,
-  TrendingUp,
-  Users,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -628,40 +625,6 @@ function VideoScrollFeed({
   );
 }
 
-type FeedTab = "for-you" | "following" | "trending" | "popular";
-
-const TAB_CONFIG: Array<{
-  id: FeedTab;
-  label: string;
-  icon: React.ReactNode;
-  ocid: string;
-}> = [
-  {
-    id: "for-you",
-    label: "For You",
-    icon: <Star size={13} />,
-    ocid: "feed.for_you.tab",
-  },
-  {
-    id: "following",
-    label: "Following",
-    icon: <Users size={13} />,
-    ocid: "feed.following.tab",
-  },
-  {
-    id: "trending",
-    label: "Trending",
-    icon: <TrendingUp size={13} />,
-    ocid: "feed.trending.tab",
-  },
-  {
-    id: "popular",
-    label: "Popular",
-    icon: <Flame size={13} />,
-    ocid: "feed.popular.tab",
-  },
-];
-
 export default function FeedPage({
   onViewProfile,
   isActive,
@@ -682,7 +645,6 @@ export default function FeedPage({
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<FeedTab>("for-you");
   const [showAuth, setShowAuth] = useState(false);
   const [loading, setLoading] = useState(true);
   const [storyRefreshKey, setStoryRefreshKey] = useState(0);
@@ -691,29 +653,23 @@ export default function FeedPage({
   const [showStoryCreator, setShowStoryCreator] = useState(false);
   const currentUserPrincipal = identity?.getPrincipal().toString() ?? null;
 
-  // Load feed from backend — re-fetches when refreshKey changes (after uploads)
+  // Load feed + followedIds simultaneously
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey intentionally triggers reload
   useEffect(() => {
     if (!backend) return;
     setLoading(true);
-    backend
-      .getFeed(0n, 20n)
-      .then((vids) => {
-        setRawVideos(vids as Video[]);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [backend, refreshKey]);
 
-  // Load followed IDs
-  useEffect(() => {
-    if (!backend || !identity) return;
-    backend
-      .getFollowing(identity.getPrincipal())
-      .then((principals) => {
+    const feedPromise = backend.getFeed(0n, 20n).catch(() => []);
+    const followingPromise = identity
+      ? backend.getFollowing(identity.getPrincipal()).catch(() => [])
+      : Promise.resolve([]);
+
+    Promise.all([feedPromise, followingPromise])
+      .then(([vids, principals]) => {
+        setRawVideos(vids as Video[]);
         setFollowedIds(
           new Set(
-            principals.map((p) =>
+            (principals as any[]).map((p) =>
               typeof p === "object"
                 ? (p as { toString(): string }).toString()
                 : String(p),
@@ -721,10 +677,11 @@ export default function FeedPage({
           ),
         );
       })
-      .catch(() => {});
-  }, [backend, identity]);
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [backend, identity, refreshKey]);
 
-  // Resolve hashes to URLs and load creator profiles
+  // Resolve hashes to URLs — all profile lookups in parallel
   useEffect(() => {
     if (!rawVideos.length) {
       setResolvedVideos([]);
@@ -733,6 +690,58 @@ export default function FeedPage({
     let cancelled = false;
 
     const resolveVideos = async () => {
+      // 1. Collect unique creator IDs
+      const uniqueCreatorIds = [
+        ...new Set(
+          rawVideos.map((v) =>
+            typeof v.creator === "object"
+              ? (v.creator as { toString(): string }).toString()
+              : String(v.creator),
+          ),
+        ),
+      ];
+
+      // 2. Fetch all profiles in parallel
+      const profileMap = new Map<
+        string,
+        { username: string; avatarUrl: string }
+      >();
+      if (backend) {
+        const { Principal } = await import("@icp-sdk/core/principal");
+        const profileResults = await Promise.allSettled(
+          uniqueCreatorIds.map(async (cid) => {
+            const opt = await backend.getProfile(Principal.fromText(cid));
+            let avatarUrl = `https://i.pravatar.cc/100?u=${cid}`;
+            let username = `${cid.slice(0, 8)}...`;
+            if (opt.__kind__ === "Some") {
+              username = opt.value.username;
+              const ak = opt.value.avatarKey;
+              if (ak) {
+                if (thumbStorageClient && ak.startsWith("sha256:")) {
+                  try {
+                    avatarUrl = await thumbStorageClient.getDirectURL(ak);
+                  } catch {
+                    avatarUrl = `https://i.pravatar.cc/100?u=${cid}`;
+                  }
+                } else {
+                  avatarUrl = ak || `https://i.pravatar.cc/100?u=${cid}`;
+                }
+              }
+            }
+            return { cid, username, avatarUrl };
+          }),
+        );
+        for (const r of profileResults) {
+          if (r.status === "fulfilled") {
+            profileMap.set(r.value.cid, {
+              username: r.value.username,
+              avatarUrl: r.value.avatarUrl,
+            });
+          }
+        }
+      }
+
+      // 3. Resolve video/thumb URLs in parallel using pre-built profile map
       const resolved = await Promise.all(
         rawVideos.map(async (v) => {
           const creatorId =
@@ -740,7 +749,6 @@ export default function FeedPage({
               ? (v.creator as { toString(): string }).toString()
               : String(v.creator);
 
-          // Resolve video URL
           let videoUrl = v.videoKey;
           if (videoStorageClient && v.videoKey.startsWith("sha256:")) {
             try {
@@ -748,7 +756,6 @@ export default function FeedPage({
             } catch {}
           }
 
-          // Resolve thumbnail URL
           let thumbUrl =
             v.thumbnailKey || `https://i.pravatar.cc/400?u=${v.id}`;
           if (thumbStorageClient && v.thumbnailKey?.startsWith("sha256:")) {
@@ -757,32 +764,11 @@ export default function FeedPage({
             } catch {}
           }
 
-          // Load creator profile
-          let creatorUsername = `${creatorId.slice(0, 8)}...`;
-          let creatorAvatar = `https://i.pravatar.cc/100?u=${creatorId}`;
-          if (backend) {
-            try {
-              const { Principal } = await import("@icp-sdk/core/principal");
-              const principalObj = Principal.fromText(creatorId);
-              const profileOpt = await backend.getProfile(principalObj);
-              if (profileOpt.__kind__ === "Some") {
-                creatorUsername = profileOpt.value.username;
-                const ak = profileOpt.value.avatarKey;
-                if (ak) {
-                  if (thumbStorageClient && ak.startsWith("sha256:")) {
-                    try {
-                      creatorAvatar = await thumbStorageClient.getDirectURL(ak);
-                    } catch {
-                      creatorAvatar = `https://i.pravatar.cc/100?u=${creatorId}`;
-                    }
-                  } else {
-                    creatorAvatar =
-                      ak || `https://i.pravatar.cc/100?u=${creatorId}`;
-                  }
-                }
-              }
-            } catch {}
-          }
+          const profile = profileMap.get(creatorId);
+          const creatorUsername =
+            profile?.username ?? `${creatorId.slice(0, 8)}...`;
+          const creatorAvatar =
+            profile?.avatarUrl ?? `https://i.pravatar.cc/100?u=${creatorId}`;
 
           return {
             ...v,
@@ -794,6 +780,7 @@ export default function FeedPage({
           } as ResolvedVideo;
         }),
       );
+
       if (!cancelled) setResolvedVideos(resolved);
     };
 
@@ -859,26 +846,6 @@ export default function FeedPage({
 
   const visibleVideos = resolvedVideos.filter((v) => !hiddenIds.has(v.id));
 
-  const trendingVideos = [...visibleVideos].sort(
-    (a, b) => Number(b.views) - Number(a.views),
-  );
-
-  const popularVideos = [...visibleVideos].sort(
-    (a, b) => Number(b.views) * 0.05 - Number(a.views) * 0.05,
-  );
-
-  const filteredVideos =
-    activeTab === "following"
-      ? visibleVideos.filter((v) => followedIds.has(v.creator as string))
-      : activeTab === "trending"
-        ? trendingVideos
-        : activeTab === "popular"
-          ? popularVideos
-          : visibleVideos;
-
-  const showFollowingEmpty =
-    activeTab === "following" && (!isLoggedIn || followedIds.size === 0);
-
   return (
     <div className="relative h-full flex flex-col">
       {/* Stories bar */}
@@ -891,56 +858,6 @@ export default function FeedPage({
         refreshKey={storyRefreshKey}
       />
       <div className="relative flex-1 overflow-hidden">
-        {/* Tab switcher */}
-        <div className="absolute top-0 left-0 right-0 z-30 flex justify-center pt-3 pb-2 pointer-events-none">
-          <div
-            className="flex items-center gap-0.5 bg-black/25 backdrop-blur-md rounded-full px-1 py-1 pointer-events-auto overflow-x-auto [&::-webkit-scrollbar]:hidden max-w-[90vw]"
-            style={{ boxShadow: "0 2px 12px rgba(0,0,0,0.4)" }}
-          >
-            {TAB_CONFIG.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className="relative flex items-center gap-1 px-3 py-1.5 text-xs font-semibold transition-all duration-200 rounded-full"
-                data-ocid={tab.ocid}
-                style={{
-                  color:
-                    activeTab === tab.id ? "#fff" : "rgba(255,255,255,0.5)",
-                  background:
-                    activeTab === tab.id
-                      ? "rgba(255,255,255,0.15)"
-                      : "transparent",
-                }}
-              >
-                <span
-                  style={{
-                    color:
-                      activeTab === tab.id
-                        ? tab.id === "trending"
-                          ? "#22D3EE"
-                          : tab.id === "popular"
-                            ? "#FF3B5C"
-                            : "#fff"
-                        : "rgba(255,255,255,0.45)",
-                  }}
-                >
-                  {tab.icon}
-                </span>
-                {tab.label}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="tab-indicator"
-                    className="absolute inset-0 rounded-full"
-                    style={{ background: "rgba(255,255,255,0.12)" }}
-                    transition={{ type: "spring", stiffness: 400, damping: 35 }}
-                  />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-
         {/* Loading state */}
         {loading && (
           <div
@@ -954,16 +871,16 @@ export default function FeedPage({
           </div>
         )}
 
-        {/* Empty state for following tab */}
+        {/* Empty state when logged in with no videos */}
         <AnimatePresence>
-          {showFollowingEmpty && (
+          {!loading && visibleVideos.length === 0 && (
             <motion.div
-              key="empty-following"
+              key="empty-feed"
               className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black gap-4 px-8 text-center"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              data-ocid="feed.following.empty_state"
+              data-ocid="feed.empty_state"
             >
               {!isLoggedIn ? (
                 <>
@@ -980,7 +897,7 @@ export default function FeedPage({
                     type="button"
                     onClick={() => setShowAuth(true)}
                     className="mt-2 px-6 py-2.5 bg-[#FF3B5C] text-white font-bold rounded-full text-sm active:opacity-80"
-                    data-ocid="feed.following.primary_button"
+                    data-ocid="feed.login.primary_button"
                   >
                     Log In
                   </button>
@@ -992,16 +909,8 @@ export default function FeedPage({
                   </div>
                   <p className="text-white text-lg font-bold">No videos yet</p>
                   <p className="text-white/60 text-sm">
-                    Follow some creators to see their videos here
+                    Be the first to upload a video!
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab("for-you")}
-                    className="mt-2 px-6 py-2.5 bg-white/10 border border-white/20 text-white font-semibold rounded-full text-sm active:opacity-80"
-                    data-ocid="feed.discover.button"
-                  >
-                    Discover Creators
-                  </button>
                 </>
               )}
             </motion.div>
@@ -1010,8 +919,7 @@ export default function FeedPage({
 
         {/* Video feed */}
         <VideoScrollFeed
-          key={activeTab}
-          videos={filteredVideos}
+          videos={visibleVideos}
           onViewProfile={onViewProfile}
           savedIds={savedIds}
           onToggleSave={toggleSave}

@@ -1,4 +1,13 @@
-import { Eye, Play, Search, TrendingUp, User } from "lucide-react";
+import {
+  Eye,
+  Flame,
+  Play,
+  Search,
+  Star,
+  TrendingUp,
+  User,
+  Users,
+} from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useBackend } from "../hooks/useBackend";
@@ -47,6 +56,19 @@ interface ResolvedUser {
   avatarUrl: string;
 }
 
+type ExploreTab = "for-you" | "following" | "trending" | "popular";
+
+const EXPLORE_TABS: Array<{
+  id: ExploreTab;
+  label: string;
+  icon: React.ReactNode;
+}> = [
+  { id: "for-you", label: "For You", icon: <Star size={13} /> },
+  { id: "following", label: "Following", icon: <Users size={13} /> },
+  { id: "trending", label: "Trending", icon: <TrendingUp size={13} /> },
+  { id: "popular", label: "Popular", icon: <Flame size={13} /> },
+];
+
 const formatViews = (v: bigint) => {
   const n = Number(v);
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -63,13 +85,15 @@ export default function ExplorePage({
   onViewPost: (postId: string) => void;
   refreshKey?: number;
 }) {
-  const { backend } = useBackend();
+  const { backend, identity } = useBackend();
   const thumbStorageClient = useStorageClient("thumbnails");
   const imageStorageClient = useStorageClient("images");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<GridItem[]>([]);
   const [users, setUsers] = useState<ResolvedUser[]>([]);
+  const [exploreTab, setExploreTab] = useState<ExploreTab>("for-you");
+  const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resolveImageUrl = async (key: string, id: string): Promise<string> => {
@@ -106,6 +130,23 @@ export default function ExplorePage({
       return "...";
     }
   };
+
+  // Load followedIds
+  useEffect(() => {
+    if (!backend || !identity) return;
+    backend
+      .getFollowing(identity.getPrincipal())
+      .then((principals) => {
+        setFollowedIds(
+          new Set(
+            (principals as any[]).map((p) =>
+              typeof p === "object" ? p.toString() : String(p),
+            ),
+          ),
+        );
+      })
+      .catch(() => {});
+  }, [backend, identity]);
 
   // Load initial feed: photos + videos interleaved — re-fetches when refreshKey changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: storage clients are stable; refreshKey intentionally triggers reload
@@ -253,11 +294,34 @@ export default function ExplorePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, backend]);
 
+  // Filter/sort items based on active tab
+  const displayItems = (() => {
+    if (query.trim()) return items; // search overrides tab
+    switch (exploreTab) {
+      case "following":
+        return items.filter((i) => followedIds.has(i.creator));
+      case "trending":
+        return [...items].sort(
+          (a, b) =>
+            Number((b as ResolvedVideo).views ?? 0n) -
+            Number((a as ResolvedVideo).views ?? 0n),
+        );
+      case "popular":
+        return [...items].sort(
+          (a, b) =>
+            Number((b as ResolvedVideo).views ?? 0n) -
+            Number((a as ResolvedVideo).views ?? 0n),
+        );
+      default:
+        return items;
+    }
+  })();
+
   return (
     <div className="h-full overflow-y-auto bg-[#0F1216]">
       {/* Search bar */}
-      <div className="sticky top-0 bg-[#0F1216]/95 backdrop-blur px-4 pt-4 pb-3 z-10">
-        <div className="flex items-center gap-2 bg-[#1A1F26] rounded-2xl px-4 py-3 border border-[#2A3038] focus-within:border-[#22D3EE] transition-colors">
+      <div className="sticky top-0 bg-[#0F1216]/95 backdrop-blur px-4 pt-4 pb-0 z-10">
+        <div className="flex items-center gap-2 bg-[#1A1F26] rounded-2xl px-4 py-3 border border-[#2A3038] focus-within:border-[#22D3EE] transition-colors mb-3">
           <Search size={18} className="text-[#8B95A3] shrink-0" />
           <input
             className="flex-1 bg-transparent text-[#E9EEF5] placeholder-[#8B95A3] outline-none text-sm"
@@ -276,6 +340,28 @@ export default function ExplorePage({
             </button>
           )}
         </div>
+
+        {/* Feed tabs — only when not searching */}
+        {!query.trim() && (
+          <div className="flex gap-2 pb-3 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            {EXPLORE_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setExploreTab(tab.id)}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold shrink-0 transition-all ${
+                  exploreTab === tab.id
+                    ? "bg-[#22D3EE] text-black"
+                    : "bg-[#1A1F26] border border-[#2A3038] text-[#8B95A3]"
+                }`}
+                data-ocid={`explore.${tab.id}.tab`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Most Viewed */}
@@ -392,9 +478,9 @@ export default function ExplorePage({
               />
             ))}
           </div>
-        ) : items.length > 0 ? (
+        ) : displayItems.length > 0 ? (
           <div className="grid grid-cols-3 gap-0.5" data-ocid="explore.list">
-            {items.map((item, i) => (
+            {displayItems.map((item, i) => (
               <motion.div
                 key={item.id}
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -429,7 +515,11 @@ export default function ExplorePage({
         ) : (
           <div className="text-center py-16" data-ocid="explore.empty_state">
             <p className="text-[#8B95A3]">
-              {query ? `No results for "${query}"` : "Nothing here yet"}
+              {query
+                ? `No results for "${query}"`
+                : exploreTab === "following"
+                  ? "Follow creators to see their content here"
+                  : "Nothing here yet"}
             </p>
           </div>
         )}

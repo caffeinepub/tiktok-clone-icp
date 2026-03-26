@@ -68,9 +68,12 @@ export default function StoriesBar({
         const groupsArr: GroupedCreator[] = [];
 
         for (const [cid, sts] of map.entries()) {
-          if (cid === currentPrincipal) continue;
+          // Include own story — no longer skip current principal
+          const isOwn = cid === currentPrincipal;
           const profile = userMap.get(cid);
-          const username = profile?.username ?? `${cid.slice(0, 6)}...`;
+          const username = isOwn
+            ? "Your Story"
+            : (profile?.username ?? `${cid.slice(0, 6)}...`);
 
           let avatarUrl = `https://i.pravatar.cc/100?u=${cid}`;
           const avatarKey = profile?.avatarKey;
@@ -116,7 +119,7 @@ export default function StoriesBar({
       style={{ WebkitOverflowScrolling: "touch" }}
       data-ocid="stories.list"
     >
-      {/* Your Story */}
+      {/* Your Story — add new */}
       {isLoggedIn && (
         <button
           type="button"
@@ -130,12 +133,12 @@ export default function StoriesBar({
             </div>
           </div>
           <span className="text-[10px] text-[#8B95A3] w-16 text-center truncate">
-            Your Story
+            Add Story
           </span>
         </button>
       )}
 
-      {/* Other creators */}
+      {/* All creators including own posted stories */}
       {groups.map((g) => (
         <button
           key={g.creatorId}

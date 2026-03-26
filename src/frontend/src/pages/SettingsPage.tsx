@@ -17,6 +17,7 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useBackend } from "../hooks/useBackend";
+import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 interface Props {
   onBack: () => void;
@@ -25,6 +26,7 @@ interface Props {
 
 export default function SettingsPage({ onBack, onEditProfile }: Props) {
   const { backend, identity } = useBackend();
+  const { clear } = useInternetIdentity();
   const [isPrivate, setIsPrivate] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -98,7 +100,7 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
 
   const handleLogout = () => {
     if (backend) backend.logout().catch(() => {});
-    onBack();
+    clear();
   };
 
   const handleClearCache = () => {
