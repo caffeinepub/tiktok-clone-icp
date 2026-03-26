@@ -19,8 +19,10 @@ export function useStorageClient(bucket: string) {
 
   const storageClient = useMemo(() => {
     if (!config) return null;
+    // Only create storage client when user has a real authenticated identity
+    if (!identity || identity.getPrincipal().isAnonymous()) return null;
     const agent = new HttpAgent({
-      identity: identity ?? undefined,
+      identity,
       host: config.backend_host,
     });
     return new StorageClient(

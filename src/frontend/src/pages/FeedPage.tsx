@@ -941,41 +941,6 @@ export default function FeedPage({
           </div>
         </div>
 
-        {/* Tab badge */}
-        <AnimatePresence>
-          {(activeTab === "trending" || activeTab === "popular") && (
-            <motion.div
-              key={activeTab}
-              className="absolute top-16 left-1/2 -translate-x-1/2 z-20 pointer-events-none"
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-            >
-              <div
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold"
-                style={{
-                  background:
-                    activeTab === "trending"
-                      ? "rgba(34,211,238,0.15)"
-                      : "rgba(255,59,92,0.15)",
-                  border:
-                    activeTab === "trending"
-                      ? "1px solid rgba(34,211,238,0.3)"
-                      : "1px solid rgba(255,59,92,0.3)",
-                  color: activeTab === "trending" ? "#22D3EE" : "#FF3B5C",
-                }}
-              >
-                {activeTab === "trending" ? (
-                  <TrendingUp size={11} />
-                ) : (
-                  <Flame size={11} />
-                )}
-                {activeTab === "trending" ? "Most Viewed" : "Most Liked"}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
         {/* Loading state */}
         {loading && (
           <div

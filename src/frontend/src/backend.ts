@@ -170,7 +170,7 @@ export class Backend implements backendInterface {
     }
     async getProfile(p: Principal): Promise<any> {
         const r = await this.actor.getProfile(p);
-        return r.length > 0 ? r[0] : null;
+        return r.length > 0 ? some(r[0]) : none();
     }
     async updateProfile(username: string, bio: string, avatarKey: string): Promise<void> {
         await this.actor.updateProfile(username, bio, avatarKey);
@@ -296,7 +296,7 @@ export class Backend implements backendInterface {
     }
     async getPinnedVideo(p: Principal): Promise<any> {
         const r = await this.actor.getPinnedVideo(p);
-        return r.length > 0 ? r[0] : null;
+        return r.length > 0 ? some(r[0]) : none();
     }
     async reportVideo(id: string, reason: string): Promise<void> {
         await this.actor.reportVideo(id, reason);

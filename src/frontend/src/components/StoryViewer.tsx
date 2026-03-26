@@ -6,6 +6,8 @@ import {
   Send,
   Share2,
   Trash2,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -53,6 +55,7 @@ export default function StoryViewer({
   const videoClient = useStorageClient("videos");
   const thumbClient = useStorageClient("thumbnails");
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [videoMuted, setVideoMuted] = useState(false);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -347,18 +350,32 @@ export default function StoryViewer({
 
       {/* Top controls */}
       <div className="absolute top-12 left-0 right-0 flex items-center justify-between px-4 z-50">
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-black/40"
-          data-ocid="story_viewer.close_button"
-        >
-          {currentIndex > 0 ? (
-            <ChevronLeft size={20} className="text-white" />
-          ) : (
-            <X size={20} className="text-white" />
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setVideoMuted((m) => !m)}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-black/40"
+            data-ocid="story_viewer.mute_toggle"
+          >
+            {videoMuted ? (
+              <VolumeX size={18} className="text-white" />
+            ) : (
+              <Volume2 size={18} className="text-white" />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-black/40"
+            data-ocid="story_viewer.close_button"
+          >
+            {currentIndex > 0 ? (
+              <ChevronLeft size={20} className="text-white" />
+            ) : (
+              <X size={20} className="text-white" />
+            )}
+          </button>
+        </div>
         {isOwn && (
           <button
             type="button"
@@ -394,7 +411,7 @@ export default function StoryViewer({
                   className="w-full h-full object-cover"
                   autoPlay
                   loop
-                  muted
+                  muted={videoMuted}
                   playsInline
                 />
               ) : (

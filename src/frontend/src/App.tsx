@@ -1,6 +1,15 @@
-import { Bell, CloudUpload, Compass, Heart, Home, User, X } from "lucide-react";
+import {
+  Bell,
+  CloudUpload,
+  Compass,
+  Heart,
+  Home,
+  Plus,
+  User,
+  X,
+} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import VideoUploadModal from "./components/VideoUploadModal";
 import { useBackend } from "./hooks/useBackend";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
@@ -22,6 +31,18 @@ interface ChatState {
   principal: string;
   username: string;
   avatarUrl: string;
+}
+
+interface NotifItem {
+  id: string;
+  type: string;
+  senderId: string;
+  senderUsername: string;
+  senderAvatar: string;
+  text: string;
+  timeMs: number;
+  read: boolean;
+  videoId?: string | null;
 }
 
 /** Wait up to `timeoutMs` for a value supplier to return non-null/undefined. */
@@ -51,6 +72,17 @@ function waitForValue<T>(
   });
 }
 
+const typeText = (t: string, videoId: string | null | undefined) => {
+  if (t === "like") return videoId ? "liked your video" : "liked something";
+  if (t === "comment") return "commented on your video";
+  if (t === "match") return "You matched! 🎉";
+  if (t === "follow_request") return "sent you a follow request";
+  if (t === "follow_request_accepted") return "accepted your follow request";
+  if (t === "story_reaction") return "reacted to your story";
+  if (t === "story_comment") return "commented on your story";
+  return "started following you";
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [viewingCreator, setViewingCreator] = useState<string | null>(null);
@@ -69,10 +101,14 @@ export default function App() {
   } | null>(null);
   const [feedRefreshKey, setFeedRefreshKey] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const [notifs, setNotifs] = useState<NotifItem[]>([]);
+  const [notifsLoading, setNotifsLoading] = useState(false);
   const { backend, isLoggedIn, login } = useBackend();
   const { isLoginError, loginError } = useInternetIdentity();
   const imageStorageClient = useStorageClient("images");
   const videoStorageClient = useStorageClient("videos");
+  const thumbStorageClient = useStorageClient("thumbnails");
   const _uploadPhotoRef = useRef<((file: File) => Promise<void>) | null>(null);
 
   // Keep refs so waitForValue closures always see latest values
@@ -96,20 +132,59 @@ export default function App() {
     return () => clearTimeout(t);
   }, [uploadError]);
 
+  const loadNotifs = useCallback(async () => {
+    if (!isLoggedIn || !backend) return;
+    try {
+      const raw = await backend.getNotifications();
+      const resolved: NotifItem[] = await Promise.all(
+        (raw as any[]).map(async (n: any) => {
+          const senderId =
+            typeof n.sender === "object"
+              ? n.sender.toString()
+              : String(n.sender);
+          let senderUsername = `${senderId.slice(0, 8)}...`;
+          let senderAvatar = `https://i.pravatar.cc/100?u=${senderId}`;
+          try {
+            const profileOpt = await backend.getProfile(n.sender);
+            if (profileOpt.__kind__ === "Some") {
+              senderUsername = profileOpt.value.username;
+              let av = profileOpt.value.avatarKey || senderAvatar;
+              if (thumbStorageClient && av.startsWith("sha256:")) {
+                try {
+                  av = await thumbStorageClient.getDirectURL(av);
+                } catch {}
+              }
+              senderAvatar = av;
+            }
+          } catch {}
+          const videoId =
+            Array.isArray(n.videoId) && n.videoId.length > 0
+              ? n.videoId[0]
+              : null;
+          return {
+            id: n.id,
+            type: n.notifType,
+            senderId,
+            senderUsername,
+            senderAvatar,
+            text: typeText(n.notifType, videoId),
+            timeMs: Number(n.createdAt) / 1_000_000,
+            read: n.read,
+            videoId,
+          };
+        }),
+      );
+      setNotifs(resolved);
+      setUnreadCount(resolved.filter((n) => !n.read).length);
+    } catch {}
+  }, [backend, isLoggedIn, thumbStorageClient]);
+
   useEffect(() => {
     if (!isLoggedIn || !backend) return;
-    const fetchNotifs = async () => {
-      try {
-        const notifs = await backend.getNotifications();
-        setUnreadCount(notifs.filter((n: any) => !n.read).length);
-      } catch {
-        /* silent */
-      }
-    };
-    fetchNotifs();
-    const interval = setInterval(fetchNotifs, 10000);
+    loadNotifs();
+    const interval = setInterval(loadNotifs, 10000);
     return () => clearInterval(interval);
-  }, [isLoggedIn, backend]);
+  }, [isLoggedIn, backend, loadNotifs]);
 
   const handleViewProfile = (creatorId: string) => setViewingCreator(creatorId);
   const handleViewPost = (postId: string) => setViewingPost(postId);
@@ -128,17 +203,14 @@ export default function App() {
       login();
       return;
     }
-    // Close modal and navigate to Home so user sees the progress bar
     setShowUploadModal(false);
     setActiveTab("home");
     setUploadProgress({ filename: "Connecting...", percent: 0 });
     setUploadError(null);
     try {
-      // Fast-path: skip polling if already ready
       let be = backendRef.current;
       let vc = videoStorageClientRef.current;
       if (be == null || vc == null) {
-        // Show connecting state and wait
         [be, vc] = await Promise.all([
           waitForValue(() => backendRef.current),
           waitForValue(() => videoStorageClientRef.current),
@@ -168,17 +240,14 @@ export default function App() {
       login();
       return;
     }
-    // Close modal and navigate to Home so user sees the progress bar
     setShowUploadModal(false);
     setActiveTab("home");
     setUploadProgress({ filename: "Connecting...", percent: 0 });
     setUploadError(null);
     try {
-      // Fast-path: skip polling if already ready
       let be = backendRef.current;
       let ic = imageStorageClientRef.current;
       if (be == null || ic == null) {
-        // Show connecting state and wait
         [be, ic] = await Promise.all([
           waitForValue(() => backendRef.current),
           waitForValue(() => imageStorageClientRef.current),
@@ -199,6 +268,22 @@ export default function App() {
       setUploadError(msg);
     } finally {
       setUploadProgress(null);
+    }
+  };
+
+  const handleNotifClick = (notif: NotifItem) => {
+    setShowNotifPanel(false);
+    if (notif.videoId) {
+      setViewingPost(notif.videoId);
+    } else if (
+      notif.type === "follow_request" ||
+      notif.type === "follow_request_accepted" ||
+      notif.type === "follow"
+    ) {
+      setViewingCreator(notif.senderId);
+    } else {
+      // navigate to inbox for messages/other
+      setActiveTab("inbox");
     }
   };
 
@@ -281,23 +366,60 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-[#0F1216] text-[#E9EEF5] overflow-hidden">
-      {/* Header */}
-      <header className="flex items-center justify-between px-4 py-3 bg-[#0F1216] border-b border-[#2A3038] shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#22D3EE] to-[#FF3B5C] flex items-center justify-center">
-            <span className="text-white font-black text-base">V</span>
-          </div>
-          <span className="text-xl font-bold tracking-tight">VibeFlow</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowUploadModal(true)}
-          data-ocid="header.primary_button"
-          className="flex items-center gap-1.5 bg-[#22D3EE] text-black px-3 py-1.5 rounded-full text-sm font-bold"
-        >
-          + Create
-        </button>
-      </header>
+      {/* Header — only visible on Home tab */}
+      <AnimatePresence>
+        {activeTab === "home" && (
+          <motion.header
+            key="home-header"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="flex items-center justify-between px-4 py-3 bg-[#0F1216] border-b border-[#2A3038] shrink-0"
+          >
+            {/* Left: Logo + VibeFlow text */}
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#22D3EE] to-[#FF3B5C] flex items-center justify-center">
+                <span className="text-white font-black text-base">V</span>
+              </div>
+              <span className="text-xl font-bold tracking-tight">VibeFlow</span>
+            </div>
+
+            {/* Right: Heart (notifications) + Plus (create) */}
+            <div className="flex items-center gap-2">
+              {/* Heart notification icon */}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNotifPanel(true);
+                  setNotifsLoading(true);
+                  loadNotifs().finally(() => setNotifsLoading(false));
+                }}
+                className="relative w-9 h-9 flex items-center justify-center"
+                aria-label="Notifications"
+              >
+                <Heart size={22} className="text-white" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#FF3B5C] text-white text-[9px] font-bold flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Plus / Create button */}
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(true)}
+                data-ocid="header.primary_button"
+                className="w-9 h-9 rounded-full bg-[#22D3EE] flex items-center justify-center"
+                aria-label="Create"
+              >
+                <Plus size={20} className="text-black" />
+              </button>
+            </div>
+          </motion.header>
+        )}
+      </AnimatePresence>
 
       {/* Upload error banner */}
       <AnimatePresence>
@@ -549,6 +671,95 @@ export default function App() {
                 </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Notification Panel */}
+      <AnimatePresence>
+        {showNotifPanel && (
+          <motion.div
+            key="notif-panel"
+            className="fixed inset-0 z-[70] flex flex-col"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            {/* Backdrop */}
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/60"
+              onClick={() => setShowNotifPanel(false)}
+              aria-label="Close notifications"
+            />
+            {/* Panel */}
+            <motion.div
+              className="absolute top-0 left-0 right-0 max-h-[80vh] bg-[#151920] rounded-b-3xl border-b border-x border-[#2A3038] flex flex-col overflow-hidden"
+              initial={{ y: "-100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "-100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 240 }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+                <h3 className="text-[#E9EEF5] font-bold text-base">
+                  Notifications
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifPanel(false)}
+                  className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
+                >
+                  <X size={16} className="text-[#8B95A3]" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-y-auto flex-1">
+                {notifsLoading && notifs.length === 0 ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-6 h-6 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
+                  </div>
+                ) : notifs.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Heart size={32} className="text-[#2A3038] mx-auto mb-2" />
+                    <p className="text-[#8B95A3] text-sm">
+                      No notifications yet
+                    </p>
+                  </div>
+                ) : (
+                  <div className="px-4 pb-6 space-y-1">
+                    {notifs.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => handleNotifClick(n)}
+                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-left transition-colors ${
+                          n.read ? "bg-transparent" : "bg-[#1A1F26]"
+                        }`}
+                      >
+                        <img
+                          src={n.senderAvatar}
+                          alt=""
+                          className="w-10 h-10 rounded-full object-cover shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[#E9EEF5] text-sm font-semibold truncate">
+                            @{n.senderUsername}
+                          </p>
+                          <p className="text-[#8B95A3] text-xs truncate">
+                            {n.text}
+                          </p>
+                        </div>
+                        {!n.read && (
+                          <div className="w-2 h-2 rounded-full bg-[#FF3B5C] shrink-0" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

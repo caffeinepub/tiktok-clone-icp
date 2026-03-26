@@ -663,12 +663,7 @@ export default function ProfilePage({
       const { hash: coverPhotoKey } = await thumbStorageClient.putFile(bytes);
       const coverPhotoUrl =
         await thumbStorageClient.getDirectURL(coverPhotoKey);
-      await backend.updateProfile(
-        profile.username,
-        profile.bio,
-        profile.avatarKey || "",
-        coverPhotoKey,
-      );
+      await backend.updateCoverPhoto(coverPhotoKey);
       setProfile((prev) => ({ ...prev, coverPhotoKey }));
       setCoverUrl(coverPhotoUrl);
     } catch {}
@@ -1236,12 +1231,17 @@ export default function ProfilePage({
           setShowEdit(false);
           setShowAvatarSheet(true);
         }}
-        onSave={(p) => {
+        onSave={async (p) => {
           setProfile((prev) => ({ ...prev, ...p }));
-          if (backend)
-            backend
-              .updateProfile(p.username, p.bio, profile.avatarKey || "")
-              .catch(() => {});
+          if (backend) {
+            try {
+              await backend.updateProfile(
+                p.username,
+                p.bio,
+                profile.avatarKey || "",
+              );
+            } catch {}
+          }
           setShowEdit(false);
         }}
       />

@@ -1,4 +1,4 @@
-import { Play, Search, TrendingUp, User } from "lucide-react";
+import { Eye, Play, Search, TrendingUp, User } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { useBackend } from "../hooks/useBackend";
@@ -46,6 +46,13 @@ interface ResolvedUser {
   bio: string;
   avatarUrl: string;
 }
+
+const formatViews = (v: bigint) => {
+  const n = Number(v);
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+};
 
 export default function ExplorePage({
   onViewProfile,
@@ -270,6 +277,47 @@ export default function ExplorePage({
           )}
         </div>
       </div>
+
+      {/* Most Viewed */}
+      {!query.trim() && items.some((i) => i.type === "video") && (
+        <div className="px-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Eye size={13} className="text-[#FF3B5C]" />
+            <span className="text-[#A6B0BC] text-[11px] uppercase tracking-widest font-semibold">
+              Most Viewed
+            </span>
+          </div>
+          <div className="flex gap-3 overflow-x-auto [&::-webkit-scrollbar]:hidden pb-1">
+            {[...items]
+              .filter((i) => i.type === "video")
+              .sort((a, b) =>
+                Number((b as ResolvedVideo).views - (a as ResolvedVideo).views),
+              )
+              .slice(0, 5)
+              .map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => onViewProfile(item.creator)}
+                  className="shrink-0 relative w-24 h-36 rounded-xl overflow-hidden bg-[#1A1F26]"
+                >
+                  <img
+                    src={(item as ResolvedVideo).thumbUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  <div className="absolute bottom-1.5 left-1.5 right-1.5 flex items-center gap-0.5">
+                    <Eye size={9} className="text-white" />
+                    <span className="text-white text-[9px] font-bold">
+                      {formatViews((item as ResolvedVideo).views)}
+                    </span>
+                  </div>
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Trending tags */}
       {!query.trim() && (
