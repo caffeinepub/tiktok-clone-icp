@@ -2,10 +2,12 @@ import type { Principal } from "@icp-sdk/core/principal";
 import {
   ArrowLeft,
   Clock,
+  Coins,
   Grid3x3,
   Heart,
   MessageCircle,
   Play,
+  Star,
   UserCheck,
   UserPlus,
 } from "lucide-react";
@@ -13,6 +15,7 @@ import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import AuthModal from "../components/AuthModal";
 import FollowListModal from "../components/FollowListModal";
+import { GradientRing } from "../components/LoveThemeEffects";
 import { useBackend } from "../hooks/useBackend";
 import { useStorageClient } from "../hooks/useStorageClient";
 import { formatCount } from "../types/app";
@@ -57,6 +60,9 @@ export default function UserProfilePage({
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
   const [showSubscribe, setShowSubscribe] = useState(false);
+  const [activeTab, setActiveTab] = useState<
+    "videos" | "reels" | "liked" | "collab"
+  >("videos");
 
   useEffect(() => {
     if (!backend || !creatorId) return;
@@ -100,7 +106,6 @@ export default function UserProfilePage({
           });
         }
 
-        // Resolve video thumbs
         const resolvedVids: VideoItem[] = await Promise.all(
           (vids as any[]).map(async (v) => {
             let thumbUrl =
@@ -120,7 +125,6 @@ export default function UserProfilePage({
         setFollowerCount((stats as any).followerCount);
         setFollowingCount((stats as any).followingCount);
 
-        // Estimate likes
         const likeCounts = await Promise.all(
           (vids as any[])
             .slice(0, 10)
@@ -136,16 +140,15 @@ export default function UserProfilePage({
         setFollowerPrincipals(followers as Principal[]);
         setFollowingPrincipals(following as Principal[]);
 
-        // Check if current user follows this creator
         if (identity) {
           const myFollowing = await backend.getFollowing(
             identity.getPrincipal(),
           );
-          const following = (myFollowing as Principal[]).some(
+          const isNowFollowing = (myFollowing as Principal[]).some(
             (p) => p.toString() === creatorId,
           );
-          setIsFollowing(following);
-          if (!following) {
+          setIsFollowing(isNowFollowing);
+          if (!isNowFollowing) {
             try {
               const hasPending = await (backend as any).hasPendingFollowRequest(
                 principal,
@@ -174,17 +177,14 @@ export default function UserProfilePage({
         setFollowerCount((c) => c + 1n);
       });
     } else if (pendingRequest) {
-      // Cancel the pending follow request
       setPendingRequest(false);
       (backend as any).cancelFollowRequest(creatorPrincipal).catch(() => {
         setPendingRequest(true);
       });
     } else {
-      // Try to follow - if private account, backend auto-creates a follow request
       backend
         .followUser(creatorPrincipal)
         .then(() => {
-          // Check if we actually followed or just sent a request
           return backend
             .getFollowing(creatorPrincipal)
             .then(() =>
@@ -203,46 +203,98 @@ export default function UserProfilePage({
     }
   };
 
+  const isCreator = followerCount >= 100n || videos.length >= 5;
+
   if (loading) {
     return (
       <div
-        className="h-full flex items-center justify-center bg-[#0F1216]"
+        className="h-full flex items-center justify-center"
+        style={{ background: "oklch(0.10 0.012 15)" }}
         data-ocid="user_profile.loading_state"
       >
-        <div className="w-8 h-8 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
+        <div
+          className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+          style={{
+            borderColor: "oklch(0.65 0.22 10)",
+            borderTopColor: "transparent",
+          }}
+        />
       </div>
     );
   }
 
   return (
     <div
-      className="h-full overflow-y-auto bg-[#0F1216]"
+      className="h-full overflow-y-auto"
+      style={{ background: "oklch(0.10 0.012 15)" }}
       data-ocid="user_profile.page"
     >
-      {/* Back button */}
-      <div className="sticky top-0 bg-[#0F1216]/90 backdrop-blur-sm px-4 py-3 z-10 border-b border-[#2A3038]">
+      {/* Back button overlay */}
+      <div
+        className="sticky top-0 flex items-center px-4 py-3 z-10"
+        style={{
+          background: "oklch(0.10 0.012 15 / 0.85)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid oklch(0.22 0.018 15 / 0.5)",
+        }}
+      >
         <button
           type="button"
           onClick={onBack}
-          className="flex items-center gap-2 text-[#E9EEF5]"
+          className="flex items-center gap-2 active:scale-95 transition-transform"
+          style={{ color: "oklch(0.94 0.008 60)" }}
           data-ocid="user_profile.back.button"
         >
           <ArrowLeft size={20} />
-          <span className="font-semibold">@{profileData.username}</span>
+          <span className="font-semibold text-sm">@{profileData.username}</span>
         </button>
+
+        {isCreator && (
+          <div
+            className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold"
+            style={{
+              background: "oklch(0.78 0.14 75 / 0.15)",
+              border: "1px solid oklch(0.78 0.14 75 / 0.4)",
+              color: "oklch(0.78 0.14 75)",
+            }}
+          >
+            <Star size={9} className="fill-current" /> Creator
+          </div>
+        )}
       </div>
 
-      <div className="px-4 pt-5 pb-3">
-        {/* Avatar + action buttons */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="w-20 h-20 rounded-full border-2 border-[#22D3EE] overflow-hidden bg-[#1A1F26]">
+      {/* Cover area */}
+      <div
+        className="h-44 relative"
+        style={{ background: "var(--love-dark-gradient)" }}
+      >
+        {/* Decorative overlay */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 30% 50%, oklch(0.65 0.22 10 / 0.15) 0%, transparent 70%)",
+          }}
+        />
+        <div className="absolute inset-0 flex items-center justify-center opacity-5">
+          <span className="text-9xl">❤️</span>
+        </div>
+      </div>
+
+      {/* Avatar section */}
+      <div className="px-4 pb-4 relative" style={{ marginTop: -40 }}>
+        <div className="flex items-end justify-between mb-4">
+          {/* Avatar with gradient ring */}
+          <GradientRing size={80} gold={isCreator}>
             <img
               src={profileData.avatar}
               alt=""
               className="w-full h-full object-cover"
             />
-          </div>
-          <div className="flex gap-2">
+          </GradientRing>
+
+          {/* Action buttons */}
+          <div className="flex gap-2 items-center">
             {onOpenChat && (
               <button
                 type="button"
@@ -253,69 +305,127 @@ export default function UserProfilePage({
                     profileData.avatar,
                   )
                 }
-                className="flex items-center gap-1.5 bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white px-4 py-2.5 rounded-xl font-bold text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm active:scale-95 transition-transform"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                  color: "oklch(0.98 0 0)",
+                }}
                 data-ocid="user_profile.message.primary_button"
               >
-                <MessageCircle size={15} /> Message
+                <MessageCircle size={14} /> DM
               </button>
             )}
             <button
               type="button"
               onClick={handleFollow}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-all ${
-                isFollowing
-                  ? "border border-[#2A3038] text-[#E9EEF5] bg-transparent"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm transition-all active:scale-95"
+              style={{
+                background: isFollowing
+                  ? "transparent"
                   : pendingRequest
-                    ? "border border-[#22D3EE]/50 text-[#22D3EE] bg-transparent"
-                    : "bg-[#22D3EE] text-black"
-              }`}
+                    ? "transparent"
+                    : "oklch(0.65 0.22 10)",
+                border: isFollowing
+                  ? "1.5px solid oklch(0.28 0.020 15)"
+                  : pendingRequest
+                    ? "1.5px solid oklch(0.65 0.22 10 / 0.5)"
+                    : "none",
+                color: isFollowing
+                  ? "oklch(0.94 0.008 60)"
+                  : pendingRequest
+                    ? "oklch(0.65 0.22 10)"
+                    : "oklch(0.98 0 0)",
+              }}
               data-ocid="user_profile.follow.button"
             >
               {isFollowing ? (
                 <>
-                  <UserCheck size={16} /> Following
+                  <UserCheck size={14} /> Following
                 </>
               ) : pendingRequest ? (
                 <>
-                  <Clock size={16} /> Requested
+                  <Clock size={14} /> Pending
                 </>
               ) : (
                 <>
-                  <UserPlus size={16} /> Follow
+                  <UserPlus size={14} /> Follow
                 </>
               )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowSubscribe(true)}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-[#FF3B5C] to-[#FF8C69] text-white px-3 py-2.5 rounded-xl font-bold text-xs"
-              data-ocid="user_profile.subscribe.button"
-            >
-              Subscribe
             </button>
           </div>
         </div>
 
         {/* Activity status */}
         <div className="mb-2">
-          <span className="text-[10px] text-[#8B95A3] font-semibold bg-[#1A1F26] px-2 py-0.5 rounded-full">
+          <span
+            className="text-[10px] font-semibold px-2.5 py-1 rounded-full"
+            style={{
+              background: "oklch(0.18 0.018 15)",
+              color: "oklch(0.60 0.010 15)",
+            }}
+          >
             {(() => {
               const hash = creatorId
                 .split("")
                 .reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
               const mins = hash % 120;
-              if (mins < 5) return "\uD83D\uDFE2 Active now";
-              if (mins < 60) return `\uD83D\uDD50 Active ${mins}m ago`;
-              return `\uD83D\uDD50 Active ${Math.floor(mins / 60)}h ago`;
+              if (mins < 5) return "🟢 Active now";
+              if (mins < 60) return `🕐 Active ${mins}m ago`;
+              return `🕐 Active ${Math.floor(mins / 60)}h ago`;
             })()}
           </span>
         </div>
 
-        <h2 className="font-bold text-xl">@{profileData.username}</h2>
-        <p className="text-[#A6B0BC] text-sm mb-4">{profileData.bio}</p>
+        <h2
+          className="font-bold text-xl"
+          style={{ color: "oklch(0.94 0.008 60)" }}
+        >
+          @{profileData.username}
+        </h2>
+        <p
+          className="text-sm mt-1 mb-4"
+          style={{ color: "oklch(0.65 0.010 15)" }}
+        >
+          {profileData.bio}
+        </p>
 
-        {/* Stats */}
-        <div className="flex gap-0 mb-4">
+        {/* Secondary actions: Subscribe + Tip */}
+        <div className="flex gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setShowSubscribe(true)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-full font-bold text-sm active:scale-95 transition-transform"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.78 0.14 75), oklch(0.68 0.18 60))",
+              color: "oklch(0.10 0 0)",
+            }}
+            data-ocid="user_profile.subscribe.button"
+          >
+            <Star size={14} className="fill-current" /> Subscribe
+          </button>
+          <button
+            type="button"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full font-bold text-sm active:scale-95 transition-transform"
+            style={{
+              border: "1.5px solid oklch(0.78 0.14 75 / 0.5)",
+              color: "oklch(0.78 0.14 75)",
+            }}
+            data-ocid="user_profile.tip.button"
+          >
+            <Coins size={14} /> Tip
+          </button>
+        </div>
+
+        {/* Stats row */}
+        <div
+          className="flex rounded-2xl overflow-hidden mb-5"
+          style={{
+            background: "oklch(0.15 0.018 15)",
+            border: "1px solid oklch(0.22 0.018 15)",
+          }}
+        >
           {[
             { label: "Videos", value: videos.length, onClick: undefined },
             {
@@ -333,74 +443,196 @@ export default function UserProfilePage({
               value: formatCount(totalLikes),
               onClick: undefined,
             },
-          ].map((stat) => (
+          ].map((stat, idx, arr) => (
             <button
               key={stat.label}
               type="button"
               onClick={stat.onClick}
-              className={`flex-1 text-center ${
+              className={`flex-1 text-center py-3 ${
                 stat.onClick
                   ? "cursor-pointer active:opacity-70"
                   : "cursor-default"
-              }`}
+              } ${idx < arr.length - 1 ? "border-r" : ""}`}
+              style={{
+                borderColor: "oklch(0.22 0.018 15)",
+              }}
             >
-              <p className="font-bold text-lg leading-none">{stat.value}</p>
-              <p className="text-[10px] text-[#8B95A3] mt-0.5">{stat.label}</p>
+              <p
+                className="font-bold text-lg leading-none"
+                style={{ color: "oklch(0.94 0.008 60)" }}
+              >
+                {stat.value}
+              </p>
+              <p
+                className="text-[10px] mt-0.5"
+                style={{ color: "oklch(0.55 0.010 15)" }}
+              >
+                {stat.label}
+              </p>
             </button>
           ))}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#2A3038] px-4 mb-3">
-        <div className="flex items-center gap-2 py-3 px-4 text-sm font-semibold border-b-2 border-[#22D3EE] text-[#22D3EE]">
-          <Grid3x3 size={16} /> Videos
-        </div>
-        <div className="flex items-center gap-2 py-3 px-4 text-sm font-semibold text-[#8B95A3]">
-          <Heart size={16} /> Liked
-        </div>
+      <div
+        className="flex border-b mx-4 mb-3 overflow-x-auto no-scrollbar"
+        style={{ borderColor: "oklch(0.22 0.018 15)" }}
+      >
+        {(
+          [
+            { id: "videos", label: "Videos", icon: <Grid3x3 size={14} /> },
+            { id: "reels", label: "Reels", icon: <Play size={14} /> },
+            { id: "liked", label: "Liked", icon: <Heart size={14} /> },
+            { id: "collab", label: "Collab", icon: <Star size={14} /> },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className="flex items-center gap-1.5 py-3 px-3 text-sm font-semibold border-b-2 shrink-0 transition-colors"
+            style={{
+              borderBottomColor:
+                activeTab === tab.id ? "oklch(0.65 0.22 10)" : "transparent",
+              color:
+                activeTab === tab.id
+                  ? "oklch(0.65 0.22 10)"
+                  : "oklch(0.55 0.010 15)",
+            }}
+            data-ocid={`user_profile.${tab.id}.tab`}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Videos grid */}
-      <div className="px-3 pb-6">
-        {videos.length === 0 ? (
+      {/* Content grid */}
+      <div className="px-3 pb-24">
+        {(activeTab === "videos" || activeTab === "reels") && (
+          <>
+            {/* Pinned video */}
+            {videos.length > 0 && (
+              <div className="mb-4">
+                <p
+                  className="text-[11px] font-bold uppercase tracking-widest mb-2 px-1"
+                  style={{ color: "oklch(0.65 0.22 10)" }}
+                >
+                  📌 Pinned
+                </p>
+                <div
+                  className="relative aspect-[9/16] max-w-[140px] rounded-xl overflow-hidden"
+                  style={{ background: "oklch(0.20 0.018 15)" }}
+                >
+                  {videos[0].thumbUrl && (
+                    <img
+                      src={videos[0].thumbUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                  <div
+                    className="absolute top-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                    style={{
+                      background: "oklch(0.65 0.22 10)",
+                      color: "oklch(0.98 0 0)",
+                    }}
+                  >
+                    📌
+                  </div>
+                  <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
+                    <Play size={9} className="text-white fill-white" />
+                    <span className="text-white text-[9px] font-bold">
+                      {formatCount(videos[0].views)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Videos grid */}
+            {videos.length === 0 ? (
+              <div
+                className="text-center py-16"
+                data-ocid="user_profile.videos.empty_state"
+              >
+                <div className="text-4xl mb-2">🎬</div>
+                <p style={{ color: "oklch(0.60 0.010 15)" }}>No videos yet</p>
+              </div>
+            ) : (
+              <div
+                className="grid grid-cols-3 gap-1"
+                data-ocid="user_profile.videos.list"
+              >
+                {videos.map((v, i) => (
+                  <motion.div
+                    key={v.id}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="relative aspect-[9/16] rounded-xl overflow-hidden"
+                    style={{ background: "oklch(0.20 0.018 15)" }}
+                    data-ocid={`user_profile.videos.item.${i + 1}`}
+                  >
+                    {v.thumbUrl ? (
+                      <img
+                        src={v.thumbUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="absolute inset-0"
+                        style={{ background: "oklch(0.22 0.018 15)" }}
+                      />
+                    )}
+                    {/* Overlay */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background:
+                          "linear-gradient(to top, oklch(0.05 0.015 15 / 0.7) 0%, transparent 50%)",
+                      }}
+                    />
+                    <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
+                      <Play size={9} className="text-white fill-white" />
+                      <span className="text-white text-[9px] font-bold">
+                        {formatCount(v.views)}
+                      </span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+
+        {activeTab === "liked" && (
+          <div className="text-center py-16">
+            <Heart
+              size={40}
+              style={{ color: "oklch(0.65 0.22 10)" }}
+              className="mx-auto mb-2 fill-current"
+            />
+            <p style={{ color: "oklch(0.60 0.010 15)" }}>
+              Liked videos are private
+            </p>
+          </div>
+        )}
+
+        {activeTab === "collab" && (
           <div
             className="text-center py-16"
-            data-ocid="user_profile.videos.empty_state"
+            data-ocid="user_profile.collab.empty_state"
           >
-            <p className="text-[#8B95A3]">No videos yet</p>
-          </div>
-        ) : (
-          <div
-            className="grid grid-cols-3 gap-1"
-            data-ocid="user_profile.videos.list"
-          >
-            {videos.map((v, i) => (
-              <motion.div
-                key={v.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.06 }}
-                className="relative aspect-[9/16] rounded-lg overflow-hidden bg-[#1A1F26]"
-                data-ocid={`user_profile.videos.item.${i + 1}`}
-              >
-                {v.thumbUrl ? (
-                  <img
-                    src={v.thumbUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-[#2A3038]" />
-                )}
-                <div className="absolute bottom-1 left-1 flex items-center gap-0.5">
-                  <Play size={9} className="text-white fill-white" />
-                  <span className="text-white text-[9px] font-bold">
-                    {formatCount(v.views)}
-                  </span>
-                </div>
-              </motion.div>
-            ))}
+            <Star
+              size={40}
+              style={{ color: "oklch(0.78 0.14 75)" }}
+              className="mx-auto mb-2"
+            />
+            <p style={{ color: "oklch(0.60 0.010 15)" }}>
+              No collaborations yet
+            </p>
           </div>
         )}
       </div>
@@ -414,34 +646,47 @@ export default function UserProfilePage({
             onClick={() => setShowSubscribe(false)}
             aria-label="Close"
           />
-          <div className="relative w-full rounded-t-3xl bg-[#151920] px-5 pt-4 pb-10 z-10">
+          <div
+            className="relative w-full rounded-t-3xl px-5 pt-4 pb-10 z-10"
+            style={{ background: "oklch(0.15 0.018 15)" }}
+            data-ocid="subscribe.modal"
+          >
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1 rounded-full bg-white/20" />
             </div>
-            <h3 className="text-[#E9EEF5] font-bold text-base mb-1">
+            <h3
+              className="font-display font-bold text-base italic mb-1"
+              style={{ color: "oklch(0.94 0.008 60)" }}
+            >
               Subscribe to @{profileData.username}
             </h3>
-            <p className="text-[#8B95A3] text-xs mb-4">
-              Unlock exclusive content
+            <p
+              className="text-xs mb-5"
+              style={{ color: "oklch(0.60 0.010 15)" }}
+            >
+              Unlock exclusive content and perks
             </p>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {[
                 {
                   tier: "Fan",
                   price: "Free",
-                  color: "border-[#2A3038] bg-[#1A1F26]",
+                  gradient: "transparent",
+                  borderColor: "oklch(0.28 0.020 15)",
                   badge: "",
                 },
                 {
                   tier: "Super Fan",
                   price: "$4.99/mo",
-                  color: "border-[#22D3EE]/50 bg-[#22D3EE]/5",
+                  gradient: "oklch(0.65 0.22 10 / 0.08)",
+                  borderColor: "oklch(0.65 0.22 10 / 0.4)",
                   badge: "Popular",
                 },
                 {
                   tier: "VIP",
                   price: "$9.99/mo",
-                  color: "border-[#FFD700]/50 bg-[#FFD700]/5",
+                  gradient: "oklch(0.78 0.14 75 / 0.08)",
+                  borderColor: "oklch(0.78 0.14 75 / 0.4)",
                   badge: "Best Value",
                 },
               ].map((t) => (
@@ -449,27 +694,38 @@ export default function UserProfilePage({
                   key={t.tier}
                   type="button"
                   onClick={() => setShowSubscribe(false)}
-                  className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 ${t.color} active:scale-95 transition-transform`}
+                  className="w-full flex items-center justify-between p-4 rounded-2xl border active:scale-95 transition-transform"
+                  style={{
+                    background: t.gradient,
+                    borderColor: t.borderColor,
+                  }}
                   data-ocid={`subscribe.${t.tier.toLowerCase().replace(" ", "_")}.button`}
                 >
                   <div className="text-left">
                     <div className="flex items-center gap-2">
-                      <span className="text-[#E9EEF5] font-bold text-sm">
+                      <span
+                        className="font-bold text-sm"
+                        style={{ color: "oklch(0.94 0.008 60)" }}
+                      >
                         {t.tier}
                       </span>
                       {t.badge && (
-                        <span className="text-[9px] font-bold bg-[#22D3EE]/20 text-[#22D3EE] px-1.5 py-0.5 rounded-full">
+                        <span
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{
+                            background: "oklch(0.65 0.22 10 / 0.2)",
+                            color: "oklch(0.65 0.22 10)",
+                          }}
+                        >
                           {t.badge}
                         </span>
                       )}
                     </div>
-                    <span className="text-[#8B95A3] text-xs">
-                      {t.price === "Free"
-                        ? "Basic access"
-                        : "Subscribe with ICP"}
-                    </span>
                   </div>
-                  <span className="text-[#E9EEF5] font-bold text-sm">
+                  <span
+                    className="font-bold text-sm"
+                    style={{ color: "oklch(0.78 0.14 75)" }}
+                  >
                     {t.price}
                   </span>
                 </button>
@@ -478,27 +734,31 @@ export default function UserProfilePage({
           </div>
         </div>
       )}
-      <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
 
-      {creatorPrincipal && (
-        <>
-          <FollowListModal
-            open={showFollowers}
-            onClose={() => setShowFollowers(false)}
-            title="Followers"
-            principals={followerPrincipals}
-            currentUserPrincipal={identity?.getPrincipal() ?? null}
-            backend={backend}
-          />
-          <FollowListModal
-            open={showFollowing}
-            onClose={() => setShowFollowing(false)}
-            title="Following"
-            principals={followingPrincipals}
-            currentUserPrincipal={identity?.getPrincipal() ?? null}
-            backend={backend}
-          />
-        </>
+      {showAuth && (
+        <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
+      )}
+
+      {showFollowers && creatorPrincipal && identity && (
+        <FollowListModal
+          open={showFollowers}
+          title="Followers"
+          principals={followerPrincipals}
+          onClose={() => setShowFollowers(false)}
+          currentUserPrincipal={identity.getPrincipal()}
+          backend={backend}
+        />
+      )}
+
+      {showFollowing && creatorPrincipal && identity && (
+        <FollowListModal
+          open={showFollowing}
+          title="Following"
+          principals={followingPrincipals}
+          onClose={() => setShowFollowing(false)}
+          currentUserPrincipal={identity.getPrincipal()}
+          backend={backend}
+        />
       )}
     </div>
   );

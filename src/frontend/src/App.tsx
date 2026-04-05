@@ -96,13 +96,13 @@ const typeText = (t: string, videoId: string | null | undefined) => {
 };
 
 const notifBorderColor = (t: string) => {
-  if (t === "like") return "border-l-[#FF3B5C]";
-  if (t === "comment" || t === "story_comment") return "border-l-[#22D3EE]";
+  if (t === "like") return "border-l-rose-500";
+  if (t === "comment" || t === "story_comment") return "border-l-amber-400";
   if (t === "follow" || t === "follow_request_accepted")
-    return "border-l-[#3B82F6]";
-  if (t === "match") return "border-l-[#FF8C69]";
-  if (t === "story_reaction") return "border-l-[#A855F7]";
-  return "border-l-[#3B82F6]";
+    return "border-l-blue-500";
+  if (t === "match") return "border-l-pink-400";
+  if (t === "story_reaction") return "border-l-purple-500";
+  return "border-l-blue-500";
 };
 
 export default function App() {
@@ -330,7 +330,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <div
-        className="fixed inset-0 bg-[#0F1216] flex flex-col items-center justify-center p-8"
+        className="fixed inset-0 bg-background flex flex-col items-center justify-center p-8"
         data-ocid="auth.page"
       >
         <motion.div
@@ -339,14 +339,14 @@ export default function App() {
           transition={{ duration: 0.5 }}
           className="flex flex-col items-center gap-6 mb-12"
         >
-          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-[#22D3EE] via-[#FF3B5C] to-[#FF8C69] flex items-center justify-center shadow-2xl">
+          <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-rose-600 via-pink-500 to-rose-400 flex items-center justify-center shadow-2xl">
             <span className="text-white font-black text-5xl">V</span>
           </div>
           <div className="text-center">
-            <h1 className="text-4xl font-black text-[#E9EEF5] tracking-tight">
+            <h1 className="text-4xl font-black text-foreground tracking-tight">
               VibeFlow
             </h1>
-            <p className="text-[#8B95A3] text-base mt-2">
+            <p className="text-muted-foreground text-base mt-2">
               Create. Match. Vibe.
             </p>
           </div>
@@ -366,12 +366,12 @@ export default function App() {
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="w-full p-4 rounded-2xl bg-[#FF3B5C]/10 border border-[#FF3B5C]/30"
+                className="w-full p-4 rounded-2xl bg-primary/10 border border-primary/30"
               >
-                <p className="text-[#FF3B5C] text-sm font-semibold text-center">
+                <p className="text-primary text-sm font-semibold text-center">
                   Authentication failed
                 </p>
-                <p className="text-[#FF3B5C]/80 text-xs text-center mt-1">
+                <p className="text-primary/80 text-xs text-center mt-1">
                   {loginError?.message?.includes("already authenticated")
                     ? "Session conflict. Please try again."
                     : "Please try again \u2014 tap Get Started below."}
@@ -382,7 +382,7 @@ export default function App() {
           <button
             type="button"
             onClick={login}
-            className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#22D3EE] to-[#0EA5E9] text-black font-black text-lg tracking-tight shadow-lg active:scale-95 transition-transform"
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-500 to-pink-500 text-white font-black text-lg tracking-tight shadow-lg active:scale-95 transition-transform"
             data-ocid="auth.login.primary_button"
           >
             Get Started
@@ -390,14 +390,14 @@ export default function App() {
           <button
             type="button"
             onClick={login}
-            className="w-full py-4 rounded-2xl bg-[#1A1F26] text-[#E9EEF5] font-semibold text-base border border-[#2A3038] active:scale-95 transition-transform"
+            className="w-full py-4 rounded-2xl bg-card text-foreground font-semibold text-base border border-border active:scale-95 transition-transform"
             data-ocid="auth.signin.secondary_button"
           >
             Sign In
           </button>
         </motion.div>
 
-        <p className="absolute bottom-8 text-[#8B95A3] text-xs text-center">
+        <p className="absolute bottom-8 text-muted-foreground text-xs text-center">
           Powered by Internet Computer
         </p>
       </div>
@@ -405,7 +405,7 @@ export default function App() {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-[#0F1216] text-[#E9EEF5] overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-background text-foreground overflow-hidden">
       {/* Header \u2014 only visible on Home tab */}
       <AnimatePresence>
         {activeTab === "home" && (
@@ -415,11 +415,11 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.2 }}
-            className="flex items-center justify-between px-4 py-3 bg-[#0F1216] border-b border-[#2A3038] shrink-0"
+            className="flex items-center justify-between px-4 py-3 bg-background border-b border-border shrink-0"
           >
             {/* Left: Logo + VibeFlow text */}
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#22D3EE] to-[#FF3B5C] flex items-center justify-center">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 flex items-center justify-center">
                 <span className="text-white font-black text-base">V</span>
               </div>
               <span className="text-xl font-bold tracking-tight">VibeFlow</span>
@@ -449,7 +449,7 @@ export default function App() {
               >
                 <Heart size={22} className="text-white" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-[#FF3B5C] text-white text-[9px] font-bold flex items-center justify-center">
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
                     {unreadCount > 9 ? "9+" : unreadCount}
                   </span>
                 )}
@@ -476,18 +476,18 @@ export default function App() {
           <motion.div
             key="upload-error"
             data-ocid="upload.error_state"
-            className="shrink-0 flex items-center justify-between gap-2 bg-[#FF3B5C]/15 border-b border-[#FF3B5C]/30 px-4 py-2.5"
+            className="shrink-0 flex items-center justify-between gap-2 bg-primary/15 border-b border-primary/30 px-4 py-2.5"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
           >
-            <span className="text-[#FF3B5C] text-xs font-semibold flex-1">
+            <span className="text-primary text-xs font-semibold flex-1">
               {uploadError}
             </span>
             <button
               type="button"
               onClick={() => setUploadError(null)}
-              className="text-[#FF3B5C] shrink-0"
+              className="text-primary shrink-0"
               aria-label="Dismiss error"
             >
               <X size={14} />
@@ -530,7 +530,13 @@ export default function App() {
       </main>
 
       {/* Bottom nav */}
-      <nav className="shrink-0 flex items-center backdrop-blur-lg bg-[#0F1216]/90 border-t border-[#2A3038]/60 pb-safe">
+      <nav
+        className="shrink-0 flex items-center backdrop-blur-xl border-t pb-safe"
+        style={{
+          background: "oklch(0.10 0.012 15 / 0.95)",
+          borderColor: "oklch(0.22 0.018 15)",
+        }}
+      >
         {(
           [
             { id: "home", icon: Home, label: "Home", badge: 0 },
@@ -556,14 +562,16 @@ export default function App() {
                 <div
                   className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg transition-all ${
                     isActive
-                      ? "bg-gradient-to-br from-[#FF3B5C] to-[#FF8C69] shadow-[#FF3B5C]/30"
-                      : "bg-[#1A1F26]"
+                      ? "bg-gradient-to-br from-rose-500 to-pink-400"
+                      : "bg-card"
                   }`}
                 >
                   <Icon
                     size={22}
                     className={
-                      isActive ? "text-white fill-white" : "text-[#8B95A3]"
+                      isActive
+                        ? "text-white fill-white"
+                        : "text-muted-foreground"
                     }
                   />
                 </div>
@@ -571,17 +579,19 @@ export default function App() {
                 <div className="relative flex flex-col items-center">
                   <Icon
                     size={22}
-                    className={isActive ? "text-[#22D3EE]" : "text-[#8B95A3]"}
+                    className={
+                      isActive ? "text-primary" : "text-muted-foreground"
+                    }
                   />
                   {badge && badge > 0 ? (
-                    <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-[#FF3B5C] text-white text-[9px] font-bold flex items-center justify-center">
+                    <span className="absolute -top-1 -right-2 w-4 h-4 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
                       {badge}
                     </span>
                   ) : null}
                   {label && (
                     <span
                       className={`text-[10px] mt-0.5 ${
-                        isActive ? "text-[#22D3EE]" : "text-[#8B95A3]"
+                        isActive ? "text-primary" : "text-muted-foreground"
                       }`}
                     >
                       {label}
@@ -611,7 +621,7 @@ export default function App() {
         {showCamera && (
           <motion.div
             key="camera"
-            className="fixed inset-0 z-50 bg-[#0F1216]"
+            className="fixed inset-0 z-50 bg-background"
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
@@ -639,7 +649,7 @@ export default function App() {
         {viewingCreator && (
           <motion.div
             key="user-profile"
-            className="fixed inset-0 z-50 bg-[#0F1216]"
+            className="fixed inset-0 z-50 bg-background"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -658,7 +668,7 @@ export default function App() {
         {viewingHashtag && (
           <motion.div
             key="hashtag-page"
-            className="fixed inset-0 z-50 bg-[#0F1216]"
+            className="fixed inset-0 z-50 bg-background"
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
@@ -716,28 +726,28 @@ export default function App() {
             exit={{ y: "100%", opacity: 0 }}
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
           >
-            <div className="bg-[#151920] border border-[#2A3038] rounded-2xl px-4 py-3 shadow-2xl shadow-black/60">
+            <div className="bg-card border border-border rounded-2xl px-4 py-3 shadow-2xl shadow-black/60">
               <div className="flex items-center gap-3">
-                <div className="shrink-0 w-8 h-8 rounded-xl bg-[#22D3EE]/10 flex items-center justify-center">
-                  <CloudUpload size={16} className="text-[#22D3EE]" />
+                <div className="shrink-0 w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <CloudUpload size={16} className="text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[#E9EEF5] text-xs font-semibold truncate max-w-[180px]">
+                    <span className="text-foreground text-xs font-semibold truncate max-w-[180px]">
                       {uploadProgress.filename}
                     </span>
-                    <span className="text-[#22D3EE] text-xs font-bold ml-2 shrink-0">
+                    <span className="text-primary text-xs font-bold ml-2 shrink-0">
                       {uploadProgress.filename === "Connecting..."
                         ? "..."
                         : `${uploadProgress.percent}%`}
                     </span>
                   </div>
-                  <div className="h-1.5 w-full rounded-full bg-[#2A3038] overflow-hidden">
+                  <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
                     {uploadProgress.filename === "Connecting..." ? (
-                      <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#22D3EE] to-[#0EA5E9] animate-pulse" />
+                      <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-rose-500 to-pink-500 animate-pulse" />
                     ) : (
                       <motion.div
-                        className="h-full rounded-full bg-gradient-to-r from-[#22D3EE] to-[#0EA5E9]"
+                        className="h-full rounded-full bg-gradient-to-r from-rose-500 to-pink-500"
                         initial={{ width: "0%" }}
                         animate={{ width: `${uploadProgress.percent}%` }}
                         transition={{ duration: 0.3, ease: "easeOut" }}
@@ -763,10 +773,10 @@ export default function App() {
             transition={{ type: "spring", damping: 28, stiffness: 260 }}
             data-ocid="mini_player.panel"
           >
-            <div className="bg-[#151920] border border-[#2A3038] rounded-2xl overflow-hidden shadow-2xl">
+            <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-2xl">
               <div className="flex items-center gap-3 p-3">
                 {/* Thumbnail */}
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#2A3038] shrink-0">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-border shrink-0">
                   <img
                     src={miniPlayer.thumbUrl}
                     alt=""
@@ -775,10 +785,10 @@ export default function App() {
                 </div>
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-[#E9EEF5] text-xs font-semibold truncate">
+                  <p className="text-foreground text-xs font-semibold truncate">
                     {miniPlayer.title}
                   </p>
-                  <p className="text-[#8B95A3] text-[10px]">
+                  <p className="text-muted-foreground text-[10px]">
                     @{miniPlayer.creatorUsername}
                   </p>
                 </div>
@@ -793,25 +803,25 @@ export default function App() {
                         else miniVideoRef.current.play();
                       }
                     }}
-                    className="w-8 h-8 rounded-full bg-[#22D3EE]/20 flex items-center justify-center"
+                    className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center"
                     data-ocid="mini_player.toggle"
                   >
                     {miniPlaying ? (
-                      <Pause size={14} className="text-[#22D3EE]" />
+                      <Pause size={14} className="text-primary" />
                     ) : (
                       <Play
                         size={14}
-                        className="text-[#22D3EE] fill-[#22D3EE] ml-0.5"
+                        className="text-primary fill-current ml-0.5"
                       />
                     )}
                   </button>
                   <button
                     type="button"
                     onClick={() => setMiniPlayer(null)}
-                    className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
+                    className="w-8 h-8 rounded-full bg-card flex items-center justify-center"
                     data-ocid="mini_player.close_button"
                   >
-                    <X size={14} className="text-[#8B95A3]" />
+                    <X size={14} className="text-muted-foreground" />
                   </button>
                 </div>
               </div>
@@ -849,7 +859,7 @@ export default function App() {
             />
             {/* Panel */}
             <motion.div
-              className="absolute top-0 left-0 right-0 max-h-[85vh] bg-[#151920] rounded-b-3xl border-b border-x border-[#2A3038] flex flex-col overflow-hidden"
+              className="absolute top-0 left-0 right-0 max-h-[85vh] bg-card rounded-b-3xl border-b border-x border-border flex flex-col overflow-hidden"
               initial={{ y: "-100%" }}
               animate={{ y: 0 }}
               exit={{ y: "-100%" }}
@@ -857,7 +867,7 @@ export default function App() {
             >
               {/* Header */}
               <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
-                <h3 className="text-[#E9EEF5] font-bold text-base">
+                <h3 className="text-foreground font-bold text-base">
                   Notifications
                 </h3>
                 <div className="flex items-center gap-2">
@@ -871,7 +881,7 @@ export default function App() {
                         setUnreadCount(0);
                         backend?.markNotificationsRead().catch(() => {});
                       }}
-                      className="text-[10px] text-[#22D3EE] font-semibold"
+                      className="text-[10px] text-primary font-semibold"
                       data-ocid="notif_panel.mark_read.button"
                     >
                       Mark all read
@@ -880,9 +890,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setShowNotifPanel(false)}
-                    className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
+                    className="w-8 h-8 rounded-full bg-card flex items-center justify-center"
                   >
-                    <X size={16} className="text-[#8B95A3]" />
+                    <X size={16} className="text-muted-foreground" />
                   </button>
                 </div>
               </div>
@@ -891,12 +901,12 @@ export default function App() {
               <div className="overflow-y-auto flex-1">
                 {notifsLoading && notifs.length === 0 ? (
                   <div className="flex items-center justify-center py-12">
-                    <div className="w-6 h-6 rounded-full border-2 border-[#22D3EE] border-t-transparent animate-spin" />
+                    <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
                   </div>
                 ) : notifs.length === 0 ? (
                   <div className="text-center py-12">
-                    <Heart size={32} className="text-[#2A3038] mx-auto mb-2" />
-                    <p className="text-[#8B95A3] text-sm">
+                    <Heart size={32} className="text-border mx-auto mb-2" />
+                    <p className="text-muted-foreground text-sm">
                       No notifications yet
                     </p>
                   </div>
@@ -907,7 +917,7 @@ export default function App() {
                         key={n.id}
                         className={`w-full flex gap-3 px-3 py-3 rounded-2xl border-l-4 ${notifBorderColor(
                           n.type,
-                        )} ${n.read ? "bg-[#1A1F26]/40" : "bg-[#1A1F26]"}`}
+                        )} ${n.read ? "bg-card/40" : "bg-card"}`}
                       >
                         {/* Avatar */}
                         <button
@@ -929,15 +939,15 @@ export default function App() {
                             onClick={() => handleNotifClick(n)}
                             className="text-left w-full"
                           >
-                            <p className="text-[#E9EEF5] text-sm font-semibold truncate">
+                            <p className="text-foreground text-sm font-semibold truncate">
                               @{n.senderUsername}
                             </p>
-                            <p className="text-[#8B95A3] text-xs leading-snug mt-0.5">
+                            <p className="text-muted-foreground text-xs leading-snug mt-0.5">
                               {n.type === "like" && (
                                 <span className="flex items-center gap-1">
                                   <Heart
                                     size={11}
-                                    className="text-[#FF3B5C] fill-[#FF3B5C] shrink-0"
+                                    className="text-primary fill-rose-500 shrink-0"
                                   />
                                   liked your video
                                 </span>
@@ -946,7 +956,7 @@ export default function App() {
                                 <span className="flex items-center gap-1">
                                   <MessageCircle
                                     size={11}
-                                    className="text-[#22D3EE] shrink-0"
+                                    className="text-primary shrink-0"
                                   />
                                   commented on your video
                                 </span>
@@ -955,7 +965,7 @@ export default function App() {
                                 <span className="flex items-center gap-1">
                                   <MessageCircle
                                     size={11}
-                                    className="text-[#22D3EE] shrink-0"
+                                    className="text-primary shrink-0"
                                   />
                                   commented on your story
                                 </span>
@@ -965,7 +975,7 @@ export default function App() {
                                 <span className="flex items-center gap-1">
                                   <UserPlus
                                     size={11}
-                                    className="text-[#3B82F6] shrink-0"
+                                    className="text-blue-400 shrink-0"
                                   />
                                   {n.type === "follow_request_accepted"
                                     ? "accepted your follow request"
@@ -976,7 +986,7 @@ export default function App() {
                                 <span className="flex items-center gap-1">
                                   <Heart
                                     size={11}
-                                    className="text-[#FF8C69] fill-[#FF8C69] shrink-0"
+                                    className="text-accent fill-current shrink-0"
                                   />
                                   You matched! \uD83C\uDF89
                                 </span>
@@ -995,7 +1005,7 @@ export default function App() {
                                 <span className="flex items-center gap-1">
                                   <UserPlus
                                     size={11}
-                                    className="text-[#22D3EE] shrink-0"
+                                    className="text-primary shrink-0"
                                   />
                                   sent you a follow request
                                 </span>
@@ -1010,7 +1020,7 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => handleFollowBack(n.senderId)}
-                                  className="px-3 py-1 rounded-full bg-[#22D3EE] text-black text-xs font-bold"
+                                  className="px-3 py-1 rounded-full bg-primary text-black text-xs font-bold"
                                   data-ocid="notif.accept.button"
                                 >
                                   Accept
@@ -1018,7 +1028,7 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => handleNotifClick(n)}
-                                  className="px-3 py-1 rounded-full border border-[#2A3038] text-[#E9EEF5] text-xs font-bold"
+                                  className="px-3 py-1 rounded-full border border-border text-foreground text-xs font-bold"
                                   data-ocid="notif.decline.button"
                                 >
                                   Decline
@@ -1030,7 +1040,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => handleFollowBack(n.senderId)}
-                                className="px-3 py-1 rounded-full bg-[#3B82F6]/20 border border-[#3B82F6]/40 text-[#3B82F6] text-xs font-bold"
+                                className="px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-400 text-xs font-bold"
                                 data-ocid="notif.follow_back.button"
                               >
                                 Follow Back
@@ -1047,7 +1057,7 @@ export default function App() {
                                     n.senderAvatar,
                                   );
                                 }}
-                                className="px-3 py-1 rounded-full bg-gradient-to-r from-[#FF3B5C] to-[#FF8C69] text-white text-xs font-bold"
+                                className="px-3 py-1 rounded-full bg-gradient-to-r from-rose-500 to-pink-400 text-white text-xs font-bold"
                                 data-ocid="notif.message.button"
                               >
                                 Message
@@ -1057,7 +1067,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={() => handleNotifClick(n)}
-                                className="px-3 py-1 rounded-full bg-[#1A1F26] border border-[#2A3038] text-[#8B95A3] text-xs font-semibold"
+                                className="px-3 py-1 rounded-full bg-card border border-border text-muted-foreground text-xs font-semibold"
                                 data-ocid="notif.view.button"
                               >
                                 View
@@ -1067,7 +1077,7 @@ export default function App() {
                         </div>
 
                         {!n.read && (
-                          <div className="w-2 h-2 rounded-full bg-[#FF3B5C] shrink-0 mt-1" />
+                          <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-1" />
                         )}
                       </div>
                     ))}

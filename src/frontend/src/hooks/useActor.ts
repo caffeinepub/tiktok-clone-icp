@@ -26,18 +26,17 @@ export function useActor() {
       };
 
       const actor = await createActorWithConfig(actorOptions);
-      const adminToken = getSecretParameter("caffeineAdminToken") || "";
-      // BUG FIX: wrap in try/catch so a failure here never nullifies the actor
+      // Wrap in try/catch — failure here must NOT block the actor from being returned
       try {
+        const adminToken = getSecretParameter("caffeineAdminToken") || "";
         await actor._initializeAccessControlWithSecret(adminToken);
-      } catch (e) {
-        console.warn("Access control init failed (non-fatal):", e);
+      } catch {
+        // Initialization failure is non-fatal; proceed with the actor as-is
       }
       return actor;
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
-    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 

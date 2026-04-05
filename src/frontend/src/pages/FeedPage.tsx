@@ -1165,7 +1165,7 @@ function VideoScrollFeed({
   return (
     <div
       ref={containerRef}
-      className="h-full overflow-y-scroll snap-y snap-mandatory"
+      className="h-full min-h-0 overflow-y-scroll snap-y snap-mandatory"
       style={{ scrollbarWidth: "none" }}
       data-ocid="feed.list"
     >
@@ -1173,7 +1173,7 @@ function VideoScrollFeed({
         <div
           key={video.id}
           data-index={i}
-          className="h-full w-full snap-start snap-always shrink-0"
+          className="h-full min-h-0 w-full snap-start snap-always shrink-0"
           data-ocid={`feed.item.${i + 1}`}
         >
           <VideoCard
@@ -1212,7 +1212,7 @@ export default function FeedPage({
   onDuet?: (videoId: string, videoUrl: string) => void;
   refreshKey?: number;
 }) {
-  const { backend, isLoggedIn, identity } = useBackend();
+  const { backend, isLoggedIn, identity, isFetching } = useBackend();
   const videoStorageClient = useStorageClient("videos");
   const thumbStorageClient = useStorageClient("thumbnails");
   const [rawVideos, setRawVideos] = useState<Video[]>([]);
@@ -1232,7 +1232,11 @@ export default function FeedPage({
   // Load feed + followedIds simultaneously
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey intentionally triggers reload
   useEffect(() => {
-    if (!backend) return;
+    if (isFetching) return; // Actor still initializing — wait
+    if (!backend) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     const feedPromise = backend.getFeed(0n, 20n).catch(() => []);
@@ -1255,7 +1259,7 @@ export default function FeedPage({
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [backend, identity, refreshKey]);
+  }, [backend, identity, refreshKey, isFetching]);
 
   // Resolve hashes to URLs — all profile lookups in parallel
   useEffect(() => {
@@ -1423,7 +1427,7 @@ export default function FeedPage({
   const visibleVideos = resolvedVideos.filter((v) => !hiddenIds.has(v.id));
 
   // Skeleton loaders
-  if (loading) {
+  if (loading || isFetching) {
     return (
       <div
         className="h-full bg-black flex flex-col"

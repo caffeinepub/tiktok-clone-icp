@@ -38,42 +38,52 @@ interface ConversationItem {
   lastMessageAt: number;
 }
 
+// Love-theme accent colors by notification type
+const typeRingColor = (t: string) => {
+  if (t === "like") return "oklch(0.65 0.22 10)";
+  if (t === "comment" || t === "story_comment") return "oklch(0.78 0.14 75)";
+  if (t === "match") return "oklch(0.65 0.22 10)";
+  if (t === "follow_request" || t === "follow_request_accepted")
+    return "oklch(0.60 0.18 240)";
+  return "oklch(0.60 0.18 240)";
+};
+
+const typeIconBg = (t: string) => {
+  if (t === "like") return "oklch(0.20 0.04 10)";
+  if (t === "comment" || t === "story_comment") return "oklch(0.20 0.03 75)";
+  if (t === "match") return "oklch(0.20 0.04 10)";
+  return "oklch(0.18 0.03 240)";
+};
+
 const typeIcon = (t: string) => {
   if (t === "like")
-    return <Heart size={14} className="text-[#FF3B5C] fill-[#FF3B5C]" />;
+    return (
+      <Heart
+        size={12}
+        style={{ color: "oklch(0.65 0.22 10)" }}
+        className="fill-current"
+      />
+    );
   if (t === "comment" || t === "story_comment")
-    return <MessageCircle size={14} className="text-[#22D3EE]" />;
+    return <MessageCircle size={12} style={{ color: "oklch(0.78 0.14 75)" }} />;
   if (t === "match")
-    return <Heart size={14} className="text-[#FF8C69] fill-[#FF8C69]" />;
+    return (
+      <Heart
+        size={12}
+        style={{ color: "oklch(0.65 0.22 10)" }}
+        className="fill-current"
+      />
+    );
   if (t === "follow_request" || t === "follow_request_accepted")
-    return <UserPlus size={14} className="text-[#22D3EE]" />;
-  if (t === "story_reaction")
-    return <span className="text-xs">\uD83D\uDE0A</span>;
-  return <UserPlus size={14} className="text-[#3B82F6]" />;
-};
-
-const typeAccentColor = (t: string) => {
-  if (t === "like") return "bg-[#FF3B5C]";
-  if (t === "comment" || t === "story_comment") return "bg-[#22D3EE]";
-  if (t === "match") return "bg-[#FF8C69]";
-  if (t === "follow_request" || t === "follow_request_accepted")
-    return "bg-[#3B82F6]";
-  return "bg-[#3B82F6]";
-};
-
-const typeBg = (t: string) => {
-  if (t === "like") return "bg-[#FF3B5C]/20";
-  if (t === "comment" || t === "story_comment") return "bg-[#22D3EE]/20";
-  if (t === "match") return "bg-[#FF8C69]/20";
-  if (t === "follow_request" || t === "follow_request_accepted")
-    return "bg-[#22D3EE]/20";
-  return "bg-[#3B82F6]/20";
+    return <UserPlus size={12} style={{ color: "oklch(0.60 0.18 240)" }} />;
+  if (t === "story_reaction") return <span className="text-[10px]">😊</span>;
+  return <UserPlus size={12} style={{ color: "oklch(0.60 0.18 240)" }} />;
 };
 
 const typeText = (t: string, videoId: string | null) => {
   if (t === "like") return videoId ? "liked your video" : "liked something";
   if (t === "comment") return "commented on your video";
-  if (t === "match") return "You matched! \uD83C\uDF89";
+  if (t === "match") return "You matched! 🎉";
   if (t === "follow_request") return "sent you a follow request";
   if (t === "follow_request_accepted") return "accepted your follow request";
   if (t === "story_reaction") return "reacted to your story";
@@ -87,8 +97,9 @@ function dayLabel(timeMs: number): string {
   const dayDiff = Math.floor(
     (now.setHours(0, 0, 0, 0) - d.setHours(0, 0, 0, 0)) / 86_400_000,
   );
-  if (dayDiff === 0) return "Today";
+  if (dayDiff === 0) return "New";
   if (dayDiff === 1) return "Yesterday";
+  if (dayDiff <= 7) return "This Week";
   return "Earlier";
 }
 
@@ -236,7 +247,6 @@ export default function InboxPage({
           };
         }),
       );
-      // Deduplicate by otherPrincipal
       const unique = new Map<string, ConversationItem>();
       for (const conv of resolved) {
         if (!unique.has(conv.otherPrincipal))
@@ -267,7 +277,6 @@ export default function InboxPage({
 
   const unreadCount = notifs.filter((n) => !n.read).length;
 
-  // Group notifications by day
   const groupedNotifs = (() => {
     const groups: { label: string; items: NotifItem[] }[] = [];
     const labelMap = new Map<string, NotifItem[]>();
@@ -276,7 +285,7 @@ export default function InboxPage({
       if (!labelMap.has(label)) labelMap.set(label, []);
       labelMap.get(label)!.push(n);
     }
-    const order = ["Today", "Yesterday", "Earlier"];
+    const order = ["New", "Yesterday", "This Week", "Earlier"];
     for (const label of order) {
       if (labelMap.has(label)) {
         groups.push({ label, items: labelMap.get(label)! });
@@ -285,7 +294,6 @@ export default function InboxPage({
     return groups;
   })();
 
-  // Filtered conversations
   const filteredConvs = conversations.filter(
     (c) =>
       !msgSearch.trim() ||
@@ -305,16 +313,29 @@ export default function InboxPage({
     return (
       <>
         <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
-        <div className="h-full flex flex-col items-center justify-center text-[#8B95A3] gap-4 p-8">
+        <div
+          className="h-full flex flex-col items-center justify-center gap-4 p-8"
+          style={{ color: "oklch(0.60 0.010 15)" }}
+        >
           <Bell size={36} />
-          <p className="font-semibold text-[#E9EEF5]">Your Inbox</p>
+          <p
+            className="font-semibold"
+            style={{ color: "oklch(0.94 0.008 60)" }}
+          >
+            Your Inbox
+          </p>
           <p className="text-center text-sm">
             Sign in to see your notifications and messages
           </p>
           <button
             type="button"
             onClick={() => setShowAuth(true)}
-            className="bg-[#22D3EE] text-black font-bold px-6 py-3 rounded-2xl active:scale-95 transition-transform"
+            className="font-bold px-6 py-3 rounded-2xl active:scale-95 transition-transform"
+            style={{
+              background:
+                "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+              color: "oklch(0.98 0 0)",
+            }}
             data-ocid="inbox.login.primary_button"
           >
             Sign In
@@ -325,19 +346,30 @@ export default function InboxPage({
   }
 
   return (
-    <div className="h-full flex flex-col bg-[#0F1216]" data-ocid="inbox.panel">
+    <div
+      className="h-full flex flex-col overflow-hidden"
+      style={{ background: "oklch(0.10 0.012 15)" }}
+      data-ocid="inbox.panel"
+    >
       {/* Tabs */}
-      <div className="flex border-b border-[#2A3038] shrink-0">
+      <div
+        className="flex shrink-0 border-b"
+        style={{ borderColor: "oklch(0.22 0.018 15)" }}
+      >
         {(["notifications", "messages"] as InboxTab[]).map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-semibold border-b-2 transition-colors ${
-              activeTab === tab
-                ? "border-[#22D3EE] text-[#22D3EE]"
-                : "border-transparent text-[#8B95A3]"
-            }`}
+            className="flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-semibold border-b-2 transition-colors"
+            style={{
+              borderBottomColor:
+                activeTab === tab ? "oklch(0.65 0.22 10)" : "transparent",
+              color:
+                activeTab === tab
+                  ? "oklch(0.65 0.22 10)"
+                  : "oklch(0.60 0.010 15)",
+            }}
             data-ocid={`inbox.${tab}.tab`}
           >
             {tab === "notifications" ? (
@@ -347,7 +379,10 @@ export default function InboxPage({
             )}
             {tab === "notifications" ? "Notifications" : "Messages"}
             {tab === "notifications" && unreadCount > 0 && (
-              <span className="w-5 h-5 rounded-full bg-[#FF3B5C] text-white text-[10px] font-bold flex items-center justify-center">
+              <span
+                className="w-5 h-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center"
+                style={{ background: "oklch(0.65 0.22 10)" }}
+              >
                 {unreadCount}
               </span>
             )}
@@ -355,82 +390,130 @@ export default function InboxPage({
         ))}
       </div>
 
-      {/* Notifications tab */}
+      {/* === NOTIFICATIONS TAB === */}
       {activeTab === "notifications" && (
         <div className="flex-1 overflow-y-auto" data-ocid="inbox.list">
-          <div className="flex items-center justify-between px-4 pt-3 pb-2">
-            {unreadCount > 0 && (
+          {/* Mark all read */}
+          {unreadCount > 0 && (
+            <div className="flex items-center justify-end px-4 pt-3 pb-1">
               <button
                 type="button"
                 onClick={() => {
                   setNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
                   backend?.markNotificationsRead().catch(() => {});
                 }}
-                className="ml-auto text-xs text-[#22D3EE] font-semibold"
+                className="text-xs font-semibold"
+                style={{ color: "oklch(0.65 0.22 10)" }}
                 data-ocid="inbox.mark_read.button"
               >
                 Mark all read
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {loading ? (
-            <div className="px-4 space-y-3" data-ocid="inbox.loading_state">
-              {[1, 2, 3, 4].map((i) => (
+            <div
+              className="px-4 pt-3 space-y-4"
+              data-ocid="inbox.loading_state"
+            >
+              {[1, 2, 3].map((i) => (
                 <div key={i} className="flex gap-3 items-start">
-                  <div className="w-14 h-14 rounded-full bg-[#2A3038] animate-pulse shrink-0" />
+                  <div
+                    className="w-14 h-14 rounded-full animate-pulse shrink-0"
+                    style={{ background: "oklch(0.22 0.015 15)" }}
+                  />
                   <div className="flex-1 space-y-2">
-                    <div className="h-3 bg-[#2A3038] animate-pulse rounded w-32" />
-                    <div className="h-3 bg-[#2A3038] animate-pulse rounded w-48" />
-                    <div className="h-2 bg-[#2A3038] animate-pulse rounded w-20" />
+                    <div
+                      className="h-3 animate-pulse rounded w-32"
+                      style={{ background: "oklch(0.22 0.015 15)" }}
+                    />
+                    <div
+                      className="h-3 animate-pulse rounded w-48"
+                      style={{ background: "oklch(0.22 0.015 15)" }}
+                    />
+                    <div
+                      className="h-2 animate-pulse rounded w-20"
+                      style={{ background: "oklch(0.22 0.015 15)" }}
+                    />
                   </div>
                 </div>
               ))}
             </div>
           ) : groupedNotifs.length === 0 ? (
             <div className="text-center py-16" data-ocid="inbox.empty_state">
-              <Bell size={48} className="text-[#2A3038] mx-auto mb-3" />
-              <p className="text-[#8B95A3]">No notifications yet</p>
+              <div className="text-5xl mb-3">❤️</div>
+              <p style={{ color: "oklch(0.60 0.010 15)" }}>
+                No notifications yet
+              </p>
+              <p
+                className="text-sm mt-1"
+                style={{ color: "oklch(0.45 0.008 15)" }}
+              >
+                Activity will appear here
+              </p>
             </div>
           ) : (
-            <div>
+            <div className="pb-4">
               {groupedNotifs.map(({ label, items }) => (
                 <div key={label}>
-                  {/* Sticky day header */}
-                  <div className="sticky top-0 bg-[#0F1216]/95 backdrop-blur px-4 py-2 z-10">
-                    <span className="text-[10px] font-bold text-[#8B95A3] uppercase tracking-widest">
+                  {/* Section header */}
+                  <div
+                    className="sticky top-0 px-4 py-2 z-10"
+                    style={{
+                      background: "oklch(0.10 0.012 15 / 0.95)",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <span
+                      className="text-[11px] font-bold uppercase tracking-widest"
+                      style={{ color: "oklch(0.55 0.010 15)" }}
+                    >
                       {label}
                     </span>
                   </div>
 
-                  <div className="divide-y divide-[#2A3038]">
+                  <div
+                    className="divide-y"
+                    style={{ borderColor: "oklch(0.18 0.012 15)" }}
+                  >
                     {items.map((n, i) => (
                       <motion.div
                         key={n.id}
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ delay: i * 0.04 }}
-                        className={`relative flex items-start gap-3 px-4 py-4 overflow-hidden ${
-                          !n.read ? "bg-[#1A1F26]/80" : ""
-                        }`}
+                        className="flex items-start gap-3 px-4 py-4"
+                        style={{
+                          background: !n.read
+                            ? "oklch(0.14 0.015 15)"
+                            : "transparent",
+                        }}
                         data-ocid={`inbox.item.${i + 1}`}
                       >
-                        {/* Left accent bar */}
-                        <div
-                          className={`absolute left-0 top-0 bottom-0 w-1 rounded-r-full ${typeAccentColor(
-                            n.type,
-                          )}`}
-                        />
-
-                        {/* Avatar */}
+                        {/* Avatar with ring */}
                         <div className="relative shrink-0">
-                          <img
-                            src={n.senderAvatar}
-                            alt=""
-                            className="w-14 h-14 rounded-full object-cover"
-                          />
                           <div
-                            className={`absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full ${typeBg(n.type)} flex items-center justify-center border border-[#0F1216]`}
+                            className="rounded-full p-0.5"
+                            style={{
+                              background: `linear-gradient(135deg, ${typeRingColor(n.type)}, oklch(0.22 0.018 15))`,
+                            }}
+                          >
+                            <img
+                              src={n.senderAvatar}
+                              alt=""
+                              className="w-12 h-12 rounded-full object-cover block"
+                              style={{
+                                border: "2px solid oklch(0.10 0.012 15)",
+                              }}
+                            />
+                          </div>
+                          {/* Type icon badge */}
+                          <div
+                            className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full flex items-center justify-center border"
+                            style={{
+                              background: typeIconBg(n.type),
+                              borderColor: "oklch(0.10 0.012 15)",
+                            }}
                           >
                             {typeIcon(n.type)}
                           </div>
@@ -438,17 +521,23 @@ export default function InboxPage({
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-[#E9EEF5] leading-snug">
+                          <p
+                            className="text-sm leading-snug"
+                            style={{ color: "oklch(0.94 0.008 60)" }}
+                          >
                             <span className="font-bold">
                               @{n.senderUsername}
                             </span>{" "}
                             {n.text}
                           </p>
-                          <p className="text-xs text-[#8B95A3] mt-1">
+                          <p
+                            className="text-xs mt-1"
+                            style={{ color: "oklch(0.55 0.010 15)" }}
+                          >
                             {timeAgo(n.timeMs)}
                           </p>
 
-                          {/* Inline action buttons per type */}
+                          {/* Action buttons */}
                           <div className="flex gap-2 mt-2 flex-wrap">
                             {n.type === "follow_request" && (
                               <>
@@ -458,7 +547,12 @@ export default function InboxPage({
                                     handleAcceptFollowRequest(n.senderId)
                                   }
                                   disabled={processingRequest === n.senderId}
-                                  className="px-3 py-1 rounded-full bg-[#22D3EE] text-black text-xs font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                                  className="px-3 py-1 rounded-full text-xs font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                                  style={{
+                                    background:
+                                      "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                                    color: "oklch(0.98 0 0)",
+                                  }}
                                   data-ocid={`inbox.follow_request.accept.${n.id}`}
                                 >
                                   {processingRequest === n.senderId
@@ -471,18 +565,28 @@ export default function InboxPage({
                                     handleDeclineFollowRequest(n.senderId)
                                   }
                                   disabled={processingRequest === n.senderId}
-                                  className="px-3 py-1 rounded-full border border-[#2A3038] text-[#E9EEF5] text-xs font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                                  className="px-3 py-1 rounded-full text-xs font-bold disabled:opacity-50 active:scale-95 transition-transform"
+                                  style={{
+                                    border: "1px solid oklch(0.28 0.020 15)",
+                                    color: "oklch(0.94 0.008 60)",
+                                  }}
                                   data-ocid={`inbox.follow_request.decline.${n.id}`}
                                 >
                                   Decline
                                 </button>
                               </>
                             )}
-                            {n.type === "follow" && (
+                            {(n.type === "follow" ||
+                              n.type === "follow_request_accepted") && (
                               <button
                                 type="button"
                                 onClick={() => handleFollowBack(n.senderId)}
-                                className="px-3 py-1 rounded-full bg-[#3B82F6]/20 border border-[#3B82F6]/40 text-[#3B82F6] text-xs font-bold active:scale-95 transition-transform"
+                                className="px-3 py-1 rounded-full text-xs font-bold active:scale-95 transition-transform"
+                                style={{
+                                  border: "1px solid oklch(0.65 0.22 10 / 0.5)",
+                                  color: "oklch(0.65 0.22 10)",
+                                  background: "oklch(0.65 0.22 10 / 0.08)",
+                                }}
                                 data-ocid="inbox.follow_back.button"
                               >
                                 Follow Back
@@ -491,31 +595,33 @@ export default function InboxPage({
                             {n.type === "match" && (
                               <button
                                 type="button"
-                                onClick={() =>
+                                onClick={() => {
                                   onOpenChat(
                                     n.senderId,
                                     n.senderUsername,
                                     n.senderAvatar,
-                                  )
-                                }
-                                className="px-3 py-1 rounded-full bg-gradient-to-r from-[#FF3B5C] to-[#FF8C69] text-white text-xs font-bold active:scale-95 transition-transform"
-                                data-ocid="inbox.message.button"
+                                  );
+                                }}
+                                className="px-3 py-1 rounded-full text-xs font-bold active:scale-95 transition-transform"
+                                style={{
+                                  background:
+                                    "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                                  color: "oklch(0.98 0 0)",
+                                }}
+                                data-ocid="inbox.match.message.button"
                               >
-                                Message
+                                💌 Message
                               </button>
                             )}
                           </div>
                         </div>
 
-                        {/* Thumbnail for like/comment */}
-                        {(n.type === "like" || n.type === "comment") && (
-                          <div className="w-10 h-10 rounded-lg bg-[#2A3038] shrink-0 overflow-hidden">
-                            <div className="w-full h-full bg-gradient-to-br from-[#22D3EE]/20 to-[#FF3B5C]/20" />
-                          </div>
-                        )}
-
-                        {!n.read && n.type !== "follow_request" && (
-                          <div className="w-2.5 h-2.5 rounded-full bg-[#22D3EE] shrink-0 mt-1 absolute right-4 top-4" />
+                        {/* Unread dot */}
+                        {!n.read && (
+                          <div
+                            className="w-2.5 h-2.5 rounded-full shrink-0 mt-1"
+                            style={{ background: "oklch(0.65 0.22 10)" }}
+                          />
                         )}
                       </motion.div>
                     ))}
@@ -527,48 +633,74 @@ export default function InboxPage({
         </div>
       )}
 
-      {/* Messages tab */}
+      {/* === MESSAGES TAB === */}
       {activeTab === "messages" && (
-        <div
-          className="flex-1 flex flex-col overflow-hidden"
-          data-ocid="inbox.messages.list"
-        >
+        <div className="flex-1 flex flex-col overflow-hidden">
           {/* Search bar */}
-          <div className="px-4 py-3 border-b border-[#2A3038] shrink-0">
-            <div className="flex items-center gap-2 bg-[#1A1F26] rounded-2xl px-3 py-2.5 border border-[#2A3038]">
-              <Search size={15} className="text-[#8B95A3] shrink-0" />
+          <div className="px-4 pt-3 pb-2 shrink-0">
+            <div
+              className="flex items-center gap-2 rounded-full px-3 py-2"
+              style={{ background: "oklch(0.18 0.018 15)" }}
+            >
+              <Search size={15} style={{ color: "oklch(0.55 0.010 15)" }} />
               <input
-                className="flex-1 bg-transparent text-[#E9EEF5] placeholder-[#8B95A3] outline-none text-sm"
+                className="flex-1 bg-transparent text-sm outline-none"
+                style={{ color: "oklch(0.94 0.008 60)" }}
                 placeholder="Search messages..."
                 value={msgSearch}
                 onChange={(e) => setMsgSearch(e.target.value)}
                 data-ocid="inbox.search_input"
               />
-              {msgSearch && (
-                <button
-                  type="button"
-                  onClick={() => setMsgSearch("")}
-                  className="text-[#8B95A3] text-xs"
-                >
-                  ✕
-                </button>
-              )}
             </div>
           </div>
 
+          {/* New Message FAB + header */}
+          <div className="flex items-center justify-between px-4 pb-2 shrink-0">
+            <h3
+              className="font-bold text-base"
+              style={{ color: "oklch(0.94 0.008 60)" }}
+            >
+              Messages
+            </h3>
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+              style={{
+                background:
+                  "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                color: "oklch(0.98 0 0)",
+              }}
+              data-ocid="inbox.new_message.button"
+            >
+              <Pencil size={12} /> New
+            </button>
+          </div>
+
           {/* Conversation list */}
-          <div className="flex-1 overflow-y-auto">
+          <div
+            className="flex-1 overflow-y-auto"
+            data-ocid="inbox.messages.list"
+          >
             {convsLoading ? (
               <div
-                className="px-4 py-3 space-y-3"
+                className="px-4 space-y-3 pt-2"
                 data-ocid="inbox.messages.loading_state"
               >
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-full bg-[#2A3038] animate-pulse shrink-0" />
+                  <div key={i} className="flex gap-3 items-center">
+                    <div
+                      className="w-12 h-12 rounded-full animate-pulse shrink-0"
+                      style={{ background: "oklch(0.22 0.015 15)" }}
+                    />
                     <div className="flex-1 space-y-2">
-                      <div className="h-3 bg-[#2A3038] animate-pulse rounded w-28" />
-                      <div className="h-2 bg-[#2A3038] animate-pulse rounded w-40" />
+                      <div
+                        className="h-3 animate-pulse rounded w-24"
+                        style={{ background: "oklch(0.22 0.015 15)" }}
+                      />
+                      <div
+                        className="h-2.5 animate-pulse rounded w-36"
+                        style={{ background: "oklch(0.22 0.015 15)" }}
+                      />
                     </div>
                   </div>
                 ))}
@@ -578,144 +710,175 @@ export default function InboxPage({
                 className="text-center py-16"
                 data-ocid="inbox.messages.empty_state"
               >
-                <MessagesSquare
-                  size={48}
-                  className="text-[#2A3038] mx-auto mb-3"
-                />
-                <p className="text-[#8B95A3]">
-                  {msgSearch
-                    ? `No results for \"${msgSearch}\"`
-                    : "No messages yet"}
-                </p>
-                <p className="text-[#8B95A3] text-xs mt-1">
-                  {!msgSearch && "Match with someone to start chatting!"}
+                <div className="text-5xl mb-3">💬</div>
+                <p style={{ color: "oklch(0.60 0.010 15)" }}>No messages yet</p>
+                <p
+                  className="text-sm mt-1"
+                  style={{ color: "oklch(0.45 0.008 15)" }}
+                >
+                  Match with someone and start chatting
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-[#2A3038]">
+              <div
+                className="divide-y"
+                style={{ borderColor: "oklch(0.18 0.012 15)" }}
+              >
                 {filteredConvs.map((conv, i) => {
-                  const isOnline = i % 3 === 0;
-                  const unread = i % 4 === 0 ? 2 : 0;
+                  const isOnline = (() => {
+                    const hash = conv.otherPrincipal
+                      .split("")
+                      .reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+                    return hash % 5 === 0;
+                  })();
+                  const isUnread = i < 2; // First two are "unread" for demo appearance
+
                   return (
-                    <motion.div
+                    <motion.button
                       key={conv.otherPrincipal}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
+                      type="button"
+                      onClick={() =>
+                        onOpenChat(
+                          conv.otherPrincipal,
+                          conv.username,
+                          conv.avatarUrl,
+                        )
+                      }
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.04 }}
-                      className="flex items-center gap-3 px-4 py-3.5 select-none"
-                      data-ocid={`inbox.conversation.item.${i + 1}`}
+                      className="w-full flex items-center gap-3 px-4 py-3.5 active:scale-[0.98] transition-transform text-left"
+                      style={{
+                        background: isUnread
+                          ? "oklch(0.13 0.015 15)"
+                          : "transparent",
+                      }}
+                      data-ocid={`inbox.conv.item.${i + 1}`}
                     >
-                      {/* Avatar with online dot */}
-                      <button
-                        type="button"
-                        className="relative shrink-0 active:scale-95 transition-transform"
-                        onClick={() =>
-                          onOpenChat(
-                            conv.otherPrincipal,
-                            conv.username,
-                            conv.avatarUrl,
-                          )
-                        }
-                      >
+                      {/* Avatar with online indicator */}
+                      <div className="relative shrink-0">
                         <img
                           src={conv.avatarUrl}
                           alt=""
-                          className="w-14 h-14 rounded-full object-cover border border-[#2A3038]"
+                          className="w-12 h-12 rounded-full object-cover"
+                          style={{
+                            border: isUnread
+                              ? "2px solid oklch(0.65 0.22 10)"
+                              : "2px solid oklch(0.22 0.018 15)",
+                          }}
                         />
                         {isOnline && (
-                          <div className="absolute bottom-0.5 right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-[#0F1216]" />
-                        )}
-                      </button>
-
-                      {/* Text */}
-                      <button
-                        type="button"
-                        className="flex-1 min-w-0 text-left"
-                        onClick={() =>
-                          onOpenChat(
-                            conv.otherPrincipal,
-                            conv.username,
-                            conv.avatarUrl,
-                          )
-                        }
-                      >
-                        <p className="font-semibold text-sm text-[#E9EEF5]">
-                          @{conv.username}
-                        </p>
-                        <p className="text-xs text-[#8B95A3] truncate mt-0.5">
-                          {conv.lastMessageText || "Say hello \uD83D\uDC4B"}
-                        </p>
-                        <p className="text-[10px] text-[#4A5568] mt-0.5">
-                          {timeAgo(conv.lastMessageAt)}
-                        </p>
-                      </button>
-
-                      {/* Right side: unread + call buttons */}
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        {unread > 0 && (
-                          <span className="w-5 h-5 rounded-full bg-[#22D3EE] text-black text-[10px] font-bold flex items-center justify-center">
-                            {unread}
-                          </span>
-                        )}
-                        <div className="flex gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openCall(conv.username, conv.avatarUrl, "voice");
+                          <div
+                            className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2"
+                            style={{
+                              background: "oklch(0.72 0.20 145)",
+                              borderColor: "oklch(0.10 0.012 15)",
                             }}
-                            className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center active:scale-90 transition-transform"
-                            aria-label="Voice call"
-                            data-ocid={`inbox.voice_call.button.${i + 1}`}
-                          >
-                            <Phone size={14} className="text-[#22D3EE]" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openCall(conv.username, conv.avatarUrl, "video");
-                            }}
-                            className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center active:scale-90 transition-transform"
-                            aria-label="Video call"
-                            data-ocid={`inbox.video_call.button.${i + 1}`}
-                          >
-                            <Video size={14} className="text-[#22D3EE]" />
-                          </button>
-                        </div>
+                          />
+                        )}
                       </div>
-                    </motion.div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p
+                            className="text-sm truncate"
+                            style={{
+                              fontWeight: isUnread ? 700 : 500,
+                              color: "oklch(0.94 0.008 60)",
+                            }}
+                          >
+                            @{conv.username}
+                          </p>
+                          <span
+                            className="text-[10px] shrink-0 ml-2"
+                            style={{
+                              color: isUnread
+                                ? "oklch(0.65 0.22 10)"
+                                : "oklch(0.55 0.010 15)",
+                            }}
+                          >
+                            {timeAgo(conv.lastMessageAt)}
+                          </span>
+                        </div>
+                        <p
+                          className="text-xs truncate mt-0.5"
+                          style={{
+                            fontWeight: isUnread ? 600 : 400,
+                            color: isUnread
+                              ? "oklch(0.80 0.008 60)"
+                              : "oklch(0.55 0.010 15)",
+                          }}
+                        >
+                          {conv.lastMessageText}
+                        </p>
+                      </div>
+
+                      {/* Unread / call icons */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isUnread && (
+                          <div
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ background: "oklch(0.65 0.22 10)" }}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCall(conv.username, conv.avatarUrl, "video");
+                          }}
+                          className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                          style={{ background: "oklch(0.20 0.018 15)" }}
+                          aria-label="Video call"
+                          data-ocid="inbox.conv.video_call.button"
+                        >
+                          <Video
+                            size={13}
+                            style={{ color: "oklch(0.65 0.22 10)" }}
+                          />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openCall(conv.username, conv.avatarUrl, "voice");
+                          }}
+                          className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                          style={{ background: "oklch(0.20 0.018 15)" }}
+                          aria-label="Voice call"
+                          data-ocid="inbox.conv.voice_call.button"
+                        >
+                          <Phone
+                            size={13}
+                            style={{ color: "oklch(0.65 0.22 10)" }}
+                          />
+                        </button>
+                      </div>
+                    </motion.button>
                   );
                 })}
               </div>
             )}
           </div>
-
-          {/* New Message FAB */}
-          <button
-            type="button"
-            className="fixed bottom-20 right-4 w-12 h-12 rounded-full flex items-center justify-center shadow-2xl active:scale-90 transition-transform z-30"
-            style={{
-              background: "linear-gradient(135deg, #22D3EE, #3B82F6)",
-              boxShadow: "0 8px 30px rgba(34,211,238,0.35)",
-            }}
-            aria-label="New message"
-            data-ocid="inbox.new_message.button"
-          >
-            <Pencil size={18} className="text-black" />
-          </button>
         </div>
       )}
 
-      {/* Call Overlay */}
+      {/* Call overlay */}
       {callTarget && (
         <CallOverlay
           open={callOpen}
           username={callTarget.username}
           avatarUrl={callTarget.avatarUrl}
           callType={callTarget.type}
-          onDecline={() => setCallOpen(false)}
-          onAccept={() => setCallOpen(false)}
+          onDecline={() => {
+            setCallOpen(false);
+            setCallTarget(null);
+          }}
+          onAccept={() => {
+            setCallOpen(false);
+            setCallTarget(null);
+          }}
         />
       )}
     </div>

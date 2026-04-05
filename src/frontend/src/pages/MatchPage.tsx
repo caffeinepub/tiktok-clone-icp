@@ -1,5 +1,5 @@
 import type { Principal } from "@icp-sdk/core/principal";
-import { Heart, MessageCircle, Users, Video, X, Zap } from "lucide-react";
+import { Heart, MessageCircle, Star, Users, Video, X, Zap } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -7,6 +7,7 @@ import {
   useTransform,
 } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import { GradientRing, MatchOverlay } from "../components/LoveThemeEffects";
 import { useBackend } from "../hooks/useBackend";
 import { useStorageClient } from "../hooks/useStorageClient";
 import UserProfilePage from "./UserProfilePage";
@@ -42,7 +43,6 @@ interface MatchRecord {
   photoCount?: number;
 }
 
-// Parse niche tags from bio
 function parseTags(bio: string): string[] {
   const m = bio.match(/\|\s*tags:([^|]+)/);
   if (!m) return [];
@@ -53,10 +53,38 @@ function parseTags(bio: string): string[] {
     .slice(0, 3);
 }
 
-const TAG_COLORS = [
-  "bg-[#22D3EE]/20 text-[#22D3EE] border-[#22D3EE]/30",
-  "bg-[#FF3B5C]/20 text-[#FF3B5C] border-[#FF3B5C]/30",
-  "bg-[#9333EA]/20 text-[#9333EA] border-[#9333EA]/30",
+function pseudoAge(principal: string): number {
+  const hash = principal
+    .split("")
+    .reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+  return 18 + (hash % 18);
+}
+
+function pseudoDistance(principal: string): string {
+  const hash = principal
+    .split("")
+    .reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+  return `${(hash % 15) + 1} km away`;
+}
+
+type MatchTab = "discover" | "requests" | "matches";
+
+const NICHE_TAG_STYLES = [
+  {
+    bg: "oklch(0.65 0.22 10 / 0.2)",
+    border: "oklch(0.65 0.22 10 / 0.4)",
+    color: "oklch(0.65 0.22 10)",
+  },
+  {
+    bg: "oklch(0.55 0.20 340 / 0.2)",
+    border: "oklch(0.55 0.20 340 / 0.4)",
+    color: "oklch(0.75 0.16 340)",
+  },
+  {
+    bg: "oklch(0.78 0.14 75 / 0.2)",
+    border: "oklch(0.78 0.14 75 / 0.4)",
+    color: "oklch(0.78 0.14 75)",
+  },
 ];
 
 function SwipeCard({
@@ -73,14 +101,14 @@ function SwipeCard({
   index: number;
 }) {
   const x = useMotionValue(0);
-  const rotate = useTransform(x, [-200, 0, 200], [-18, 0, 18]);
+  const rotate = useTransform(x, [-200, 0, 200], [-15, 0, 15]);
   const likeOpacity = useTransform(x, [20, 100], [0, 1]);
   const nopeOpacity = useTransform(x, [-100, -20], [1, 0]);
+  const [photoIndex, setPhotoIndex] = useState(0);
 
   const handleDragEnd = async (_: any, info: { offset: { x: number } }) => {
     if (info.offset.x > 100) {
-      const isMatch = await onSwipeRight();
-      if (!isMatch) x.set(0);
+      await onSwipeRight();
     } else if (info.offset.x < -100) {
       onSwipeLeft();
     } else {
@@ -88,8 +116,13 @@ function SwipeCard({
     }
   };
 
-  const totalContent = user.videoCount + user.photoCount;
   const nicheTags = parseTags(user.bio);
+  const age = pseudoAge(user.principal);
+  const distance = pseudoDistance(user.principal);
+  const photoCount = Math.min(
+    3,
+    1 + (user.videoCount > 0 ? 1 : 0) + (user.photoCount > 0 ? 1 : 0),
+  );
 
   return (
     <motion.div
@@ -97,221 +130,176 @@ function SwipeCard({
         x,
         rotate,
         zIndex: 10 - index,
-        scale: isTop ? 1 : 0.95 - index * 0.03,
-        y: isTop ? 0 : index * 8,
+        scale: isTop ? 1 : 0.95 - index * 0.025,
+        y: isTop ? 0 : index * 10,
+        boxShadow: isTop
+          ? "0 20px 60px oklch(0.65 0.22 10 / 0.3)"
+          : "0 10px 30px rgba(0,0,0,0.6)",
+        border: isTop ? "1.5px solid oklch(0.65 0.22 10 / 0.4)" : "none",
       }}
       drag={isTop ? "x" : false}
       dragConstraints={{ left: 0, right: 0 }}
       onDragEnd={handleDragEnd}
-      className={`absolute inset-x-4 top-0 h-full rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing ${
-        isTop ? "shadow-[0_20px_60px_rgba(0,0,0,0.8)]" : "shadow-2xl"
-      }`}
+      className="absolute inset-x-3 top-0 h-full rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing"
       data-ocid={isTop ? "match.card" : undefined}
     >
-      {/* Background image */}
+      {/* Background photo */}
       <div className="absolute inset-0">
         <img
           src={user.avatarUrl}
           alt=""
           className="w-full h-full object-cover"
+          style={{
+            filter:
+              photoIndex > 0
+                ? `hue-rotate(${photoIndex * 30}deg) saturate(1.2)`
+                : "none",
+          }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(to top, oklch(0.05 0.015 15) 0%, oklch(0.10 0.012 15 / 0.4) 40%, transparent 70%)",
+          }}
+        />
       </div>
 
-      {/* Video indicator badge */}
+      {/* Photo gallery dots */}
+      {isTop && photoCount > 1 && (
+        <div className="absolute top-3 left-0 right-0 flex justify-center gap-1.5 z-10">
+          {Array.from({ length: photoCount }).map((_, pi) => (
+            <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: static photo dots
+              key={pi}
+              type="button"
+              onClick={() => setPhotoIndex(pi)}
+              className="h-1 rounded-full transition-all"
+              style={{
+                width: photoIndex === pi ? 20 : 8,
+                background:
+                  photoIndex === pi
+                    ? "oklch(0.98 0 0)"
+                    : "oklch(0.98 0 0 / 0.4)",
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Video badge */}
       {user.videoCount > 0 && (
-        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-black/60 rounded-full px-2 py-1">
+        <div
+          className="absolute top-3 right-3 z-10 flex items-center gap-1 rounded-full px-2 py-1"
+          style={{ background: "oklch(0.10 0.012 15 / 0.8)" }}
+        >
           <Video size={10} className="text-white" />
           <span className="text-white text-[10px] font-semibold">
-            {user.videoCount} video{user.videoCount !== 1 ? "s" : ""}
+            {user.videoCount}
           </span>
         </div>
       )}
 
-      {/* Like / Nope stamps */}
+      {/* LIKE / NOPE stamps */}
       {isTop && (
         <>
           <motion.div
-            style={{ opacity: likeOpacity }}
-            className="absolute top-10 left-6 border-4 border-[#22D3EE] rounded-xl px-4 py-2 rotate-[-20deg] z-10"
+            style={{
+              opacity: likeOpacity,
+              border: "3px solid oklch(0.72 0.20 145)",
+            }}
+            className="absolute top-12 left-5 rounded-xl px-4 py-2 rotate-[-20deg] z-10"
           >
-            <span className="text-[#22D3EE] font-black text-2xl tracking-widest">
+            <span
+              className="font-black text-2xl tracking-widest"
+              style={{ color: "oklch(0.72 0.20 145)" }}
+            >
               LIKE
             </span>
           </motion.div>
           <motion.div
-            style={{ opacity: nopeOpacity }}
-            className="absolute top-10 right-6 border-4 border-[#FF3B5C] rounded-xl px-4 py-2 rotate-[20deg] z-10"
+            style={{
+              opacity: nopeOpacity,
+              border: "3px solid oklch(0.65 0.22 10)",
+            }}
+            className="absolute top-12 right-5 rounded-xl px-4 py-2 rotate-[20deg] z-10"
           >
-            <span className="text-[#FF3B5C] font-black text-2xl tracking-widest">
+            <span
+              className="font-black text-2xl tracking-widest"
+              style={{ color: "oklch(0.65 0.22 10)" }}
+            >
               NOPE
             </span>
           </motion.div>
         </>
       )}
 
-      {/* User info */}
+      {/* Bottom info */}
       <div className="absolute bottom-0 left-0 right-0 p-5">
-        {/* Stats bar */}
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          <div className="flex items-center gap-1.5 bg-black/60 rounded-full px-3 py-1">
-            <Users size={12} className="text-[#22D3EE]" />
-            <span className="text-white text-[11px] font-semibold">
-              {formatCount(user.followerCount)} followers
-            </span>
-          </div>
-          {totalContent > 0 && (
-            <div className="flex items-center gap-1.5 bg-black/60 rounded-full px-3 py-1">
+          {user.followerCount > 0n && (
+            <div
+              className="flex items-center gap-1 rounded-full px-2.5 py-1"
+              style={{ background: "oklch(0.10 0.012 15 / 0.75)" }}
+            >
+              <Users size={11} style={{ color: "oklch(0.65 0.22 10)" }} />
               <span className="text-white text-[11px] font-semibold">
-                {totalContent} posts
+                {formatCount(user.followerCount)}
               </span>
             </div>
           )}
           {user.mutualCount > 0n && (
-            <div className="flex items-center gap-1.5 bg-[#22D3EE]/20 rounded-full px-3 py-1 border border-[#22D3EE]/40">
-              <span className="text-[#22D3EE] text-[11px] font-semibold">
+            <div
+              className="flex items-center gap-1 rounded-full px-2.5 py-1"
+              style={{
+                background: "oklch(0.65 0.22 10 / 0.15)",
+                border: "1px solid oklch(0.65 0.22 10 / 0.4)",
+              }}
+            >
+              <span
+                className="text-[11px] font-semibold"
+                style={{ color: "oklch(0.65 0.22 10)" }}
+              >
                 {Number(user.mutualCount)} mutual
               </span>
             </div>
           )}
         </div>
 
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-white text-2xl font-black">@{user.username}</h2>
-            {user.bio && (
-              <p className="text-white/80 text-sm mt-1 line-clamp-2">
-                {user.bio.replace(/\|[^|]+/g, "").trim()}
-              </p>
-            )}
+        <h2 className="text-white text-2xl font-black">
+          @{user.username}, <span className="font-normal text-xl">{age}</span>
+        </h2>
+        <p className="text-white/70 text-sm mt-0.5">{distance}</p>
 
-            {/* Niche tags */}
-            {nicheTags.length > 0 && (
-              <div className="flex gap-1.5 mt-2 flex-wrap">
-                {nicheTags.map((tag, ti) => (
-                  <span
-                    key={tag}
-                    className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
-                      TAG_COLORS[ti % TAG_COLORS.length]
-                    }`}
-                  >
-                    {tag}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+        {user.bio && (
+          <p className="text-white/60 text-xs mt-1 line-clamp-2">
+            {user.bio.replace(/\|[^|]+/g, "").trim()}
+          </p>
+        )}
+
+        <div className="flex gap-1.5 mt-2 flex-wrap">
+          {(nicheTags.length > 0
+            ? nicheTags
+            : ["Creator", "Vibes", "Music"]
+          ).map((tag, ti) => {
+            const s = NICHE_TAG_STYLES[ti % NICHE_TAG_STYLES.length];
+            return (
+              <span
+                key={tag}
+                className="text-[10px] px-2 py-0.5 rounded-full font-semibold"
+                style={{
+                  background: s.bg,
+                  border: `1px solid ${s.border}`,
+                  color: s.color,
+                }}
+              >
+                {tag}
+              </span>
+            );
+          })}
         </div>
       </div>
     </motion.div>
-  );
-}
-
-function MatchProfileModal({
-  match,
-  onMessage,
-  onClose,
-}: {
-  match: MatchRecord;
-  onMessage: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <AnimatePresence>
-      <motion.div
-        className="fixed inset-0 z-[60] flex items-end"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        data-ocid="match.profile.modal"
-      >
-        <button
-          type="button"
-          className="absolute inset-0 bg-black/70 w-full"
-          onClick={onClose}
-          aria-label="Close modal"
-        />
-        <motion.div
-          className="relative w-full rounded-t-3xl bg-[#151920] pt-4 pb-8 px-5 z-10"
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: "100%" }}
-          transition={{ type: "spring", damping: 28, stiffness: 220 }}
-        >
-          <div className="flex justify-center mb-3">
-            <div className="w-10 h-1 rounded-full bg-white/20" />
-          </div>
-
-          <div className="flex flex-col items-center gap-3 mb-5">
-            <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FF3B5C] shadow-xl">
-              <img
-                src={match.avatarUrl}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="text-center">
-              <h3 className="text-[#E9EEF5] font-black text-lg">
-                @{match.username}
-              </h3>
-              {match.bio && (
-                <p className="text-[#8B95A3] text-sm mt-1 line-clamp-2">
-                  {match.bio.replace(/\|[^|]+/g, "").trim()}
-                </p>
-              )}
-            </div>
-
-            {/* Stats row */}
-            <div className="flex gap-4 mt-1">
-              {match.followerCount !== undefined && (
-                <div className="flex flex-col items-center">
-                  <span className="text-[#E9EEF5] font-bold text-base">
-                    {formatCount(match.followerCount)}
-                  </span>
-                  <span className="text-[#8B95A3] text-[10px]">Followers</span>
-                </div>
-              )}
-              {(match.videoCount !== undefined ||
-                match.photoCount !== undefined) && (
-                <div className="flex flex-col items-center">
-                  <span className="text-[#E9EEF5] font-bold text-base">
-                    {(match.videoCount ?? 0) + (match.photoCount ?? 0)}
-                  </span>
-                  <span className="text-[#8B95A3] text-[10px]">Posts</span>
-                </div>
-              )}
-              {match.mutualCount !== undefined && match.mutualCount > 0n && (
-                <div className="flex flex-col items-center">
-                  <span className="text-[#22D3EE] font-bold text-base">
-                    {Number(match.mutualCount)}
-                  </span>
-                  <span className="text-[#8B95A3] text-[10px]">Mutual</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3.5 rounded-2xl border border-[#2A3038] text-[#E9EEF5] font-semibold text-sm active:scale-95 transition-transform"
-              data-ocid="match.profile.close_button"
-            >
-              Close
-            </button>
-            <button
-              type="button"
-              onClick={onMessage}
-              className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
-              data-ocid="match.profile.primary_button"
-            >
-              <MessageCircle size={16} /> Message
-            </button>
-          </div>
-        </motion.div>
-      </motion.div>
-    </AnimatePresence>
   );
 }
 
@@ -322,12 +310,11 @@ export default function MatchPage({
 }) {
   const { backend, identity, isLoggedIn } = useBackend();
   const thumbStorageClient = useStorageClient("thumbnails");
+  const [activeTab, setActiveTab] = useState<MatchTab>("discover");
   const [candidates, setCandidates] = useState<MatchUser[]>([]);
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [matchOverlay, setMatchOverlay] = useState<MatchUser | null>(null);
-  const [profileModalMatch, setProfileModalMatch] =
-    useState<MatchRecord | null>(null);
   const [viewingMatchProfile, setViewingMatchProfile] =
     useState<MatchRecord | null>(null);
   const myAvatarRef = useRef("");
@@ -360,7 +347,6 @@ export default function MatchPage({
           backend.getMatches().catch(() => []),
         ]);
 
-        // Resolve matches first so we can deduplicate candidates
         const resolvedMatches: MatchRecord[] = await Promise.all(
           (rawMatches as any[]).map(async (m) => {
             const myPStr = myPrincipal.toString();
@@ -400,25 +386,27 @@ export default function MatchPage({
         );
         setMatches(resolvedMatches);
 
-        // Build a set of already-matched principals
         const matchedSet = new Set(resolvedMatches.map((m) => m.principal));
-        // Also exclude self
         matchedSet.add(myPrincipal.toString());
 
-        // Resolve candidates with details
         const resolved: MatchUser[] = await Promise.all(
-          (rawCandidates as any[]).map(async (u) => {
+          (rawCandidates as any[]).map(async (u: any) => {
             const pStr =
               typeof u.principal === "object"
                 ? u.principal.toString()
                 : String(u.principal);
-            let avatarUrl =
-              u.avatarKey || `https://i.pravatar.cc/150?u=${pStr}`;
-            if (thumbStorageClient && avatarUrl.startsWith("sha256:")) {
-              try {
-                avatarUrl = await thumbStorageClient.getDirectURL(avatarUrl);
-              } catch {}
-            }
+            let avatarUrl = `https://i.pravatar.cc/100?u=${pStr}`;
+            try {
+              const profileOpt = await backend.getProfile(u.principal);
+              if (profileOpt.__kind__ === "Some") {
+                const av = profileOpt.value.avatarKey || avatarUrl;
+                if (thumbStorageClient && av.startsWith("sha256:")) {
+                  avatarUrl = await thumbStorageClient.getDirectURL(av);
+                } else {
+                  avatarUrl = av;
+                }
+              }
+            } catch {}
             const [videos, photos, details] = await Promise.all([
               backend.getUserVideos(u.principal).catch(() => []),
               backend.getUserPhotos(u.principal).catch(() => []),
@@ -439,11 +427,7 @@ export default function MatchPage({
           }),
         );
 
-        // Filter out already-matched users and self to avoid duplicates
-        const filteredCandidates = resolved.filter(
-          (u) => !matchedSet.has(u.principal),
-        );
-        setCandidates(filteredCandidates);
+        setCandidates(resolved.filter((u) => !matchedSet.has(u.principal)));
       } catch {}
       setLoading(false);
     };
@@ -487,13 +471,27 @@ export default function MatchPage({
 
   if (!isLoggedIn) {
     return (
-      <div className="h-full flex flex-col items-center justify-center gap-4 p-8 bg-[#0F1216]">
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#FF3B5C] to-[#FF8C69] flex items-center justify-center">
+      <div
+        className="h-full flex flex-col items-center justify-center gap-4 p-8"
+        style={{ background: "oklch(0.10 0.012 15)" }}
+      >
+        <div
+          className="w-20 h-20 rounded-full flex items-center justify-center"
+          style={{ background: "var(--love-gradient)" }}
+        >
           <Heart size={36} className="text-white fill-white" />
         </div>
-        <p className="font-bold text-xl text-[#E9EEF5]">Discover Matches</p>
-        <p className="text-[#8B95A3] text-sm text-center">
-          Sign in to start swiping and find your vibe
+        <p
+          className="font-display text-2xl font-bold italic"
+          style={{ color: "oklch(0.94 0.008 60)" }}
+        >
+          Find Your Match
+        </p>
+        <p
+          className="text-sm text-center"
+          style={{ color: "oklch(0.60 0.010 15)" }}
+        >
+          Sign in to discover people and start connecting
         </p>
       </div>
     );
@@ -501,280 +499,385 @@ export default function MatchPage({
 
   return (
     <div
-      className="h-full flex flex-col bg-[#0F1216] overflow-hidden"
+      className="h-full flex flex-col overflow-hidden"
+      style={{ background: "oklch(0.10 0.012 15)" }}
       data-ocid="match.page"
     >
-      {/* Header */}
-      <div className="px-4 pt-4 pb-2 shrink-0">
-        <div className="flex items-center gap-2">
-          <Heart size={20} className="text-[#FF3B5C] fill-[#FF3B5C]" />
-          <h2 className="text-lg font-black text-[#E9EEF5]">Discover</h2>
+      {/* Header + tabs */}
+      <div
+        className="shrink-0 px-4 pt-3 pb-0 border-b"
+        style={{ borderColor: "oklch(0.22 0.018 15)" }}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-2xl animate-heartbeat">❤️</span>
+          <h2
+            className="font-display text-xl font-bold italic"
+            style={{ color: "oklch(0.94 0.008 60)" }}
+          >
+            Discover
+          </h2>
           {matches.length > 0 && (
-            <span className="ml-auto text-xs text-[#8B95A3]">
+            <span
+              className="ml-auto text-xs font-semibold px-2.5 py-1 rounded-full"
+              style={{
+                background: "oklch(0.65 0.22 10 / 0.15)",
+                color: "oklch(0.65 0.22 10)",
+              }}
+            >
               {matches.length} match{matches.length !== 1 ? "es" : ""}
             </span>
           )}
         </div>
-      </div>
 
-      {/* Card stack */}
-      <div
-        className="flex-1 relative mx-4 my-2 overflow-hidden"
-        style={{ minHeight: 0 }}
-      >
-        {loading ? (
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            data-ocid="match.loading_state"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-[#1A1F26] animate-pulse" />
-          </div>
-        ) : candidates.length === 0 ? (
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-4"
-            data-ocid="match.empty_state"
-          >
-            <div className="w-20 h-20 rounded-full bg-[#1A1F26] flex items-center justify-center">
-              <Zap size={36} className="text-[#8B95A3]" />
-            </div>
-            <p className="font-bold text-[#E9EEF5]">You've seen everyone!</p>
-            <p className="text-[#8B95A3] text-sm text-center">
-              Check back later for new people
-            </p>
-          </div>
-        ) : (
-          <div className="absolute inset-0">
-            {candidates.slice(-3).map((user, i, arr) => (
-              <SwipeCard
-                key={user.principal}
-                user={user}
-                isTop={i === arr.length - 1}
-                index={arr.length - 1 - i}
-                onSwipeLeft={handleSwipeLeft}
-                onSwipeRight={handleSwipeRight}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Action buttons — large round NOPE/LIKE below card */}
-      {!loading && candidates.length > 0 && (
-        <div className="shrink-0 flex items-center justify-center gap-10 py-4">
-          <button
-            type="button"
-            onClick={handleSwipeLeft}
-            className="w-16 h-16 rounded-full bg-[#1A1F26] border-2 border-[#FF3B5C] flex items-center justify-center shadow-xl active:scale-90 transition-transform select-none"
-            style={{ boxShadow: "0 8px 24px rgba(255,59,92,0.25)" }}
-            data-ocid="match.nope.button"
-          >
-            <X size={28} className="text-[#FF3B5C]" />
-          </button>
-
-          <button
-            type="button"
-            onClick={handleSwipeRight}
-            className="w-16 h-16 rounded-full bg-[#1A1F26] border-2 border-[#22D3EE] flex items-center justify-center shadow-xl active:scale-90 transition-transform select-none"
-            style={{ boxShadow: "0 8px 24px rgba(34,211,238,0.25)" }}
-            data-ocid="match.like.button"
-          >
-            <Heart size={28} className="text-[#22D3EE] fill-[#22D3EE]" />
-          </button>
+        <div className="flex">
+          {(["discover", "requests", "matches"] as MatchTab[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className="flex-1 text-sm font-semibold py-2.5 border-b-2 transition-colors capitalize"
+              style={{
+                borderBottomColor:
+                  activeTab === tab ? "oklch(0.65 0.22 10)" : "transparent",
+                color:
+                  activeTab === tab
+                    ? "oklch(0.65 0.22 10)"
+                    : "oklch(0.55 0.010 15)",
+              }}
+              data-ocid={`match.${tab}.tab`}
+            >
+              {tab}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      {/* My Matches — horizontal card scroll */}
-      {matches.length > 0 && (
-        <div className="shrink-0 px-4 pb-4">
-          <p className="text-xs text-[#8B95A3] uppercase tracking-widest font-semibold mb-3">
-            Matches
-          </p>
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar [&::-webkit-scrollbar]:hidden">
-            {matches.map((m) => (
-              <button
-                key={m.principal}
-                type="button"
-                onClick={() => setViewingMatchProfile(m)}
-                className="flex flex-col items-center gap-2 shrink-0 bg-[#1A1F26] rounded-2xl p-3 w-[88px] border border-[#2A3038] active:scale-95 transition-transform"
-                data-ocid="match.match.button"
+      {/* DISCOVER */}
+      {activeTab === "discover" && (
+        <>
+          <div
+            className="flex-1 relative mx-3 my-3 overflow-hidden"
+            style={{ minHeight: 0 }}
+          >
+            {loading ? (
+              <div
+                className="absolute inset-0 flex items-center justify-center"
+                data-ocid="match.loading_state"
               >
                 <div
-                  className="w-12 h-12 rounded-full overflow-hidden border-2 p-[2px]"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #FF3B5C, #FF8C69, #22D3EE)",
-                  }}
+                  className="w-16 h-16 rounded-2xl animate-pulse"
+                  style={{ background: "oklch(0.20 0.018 15)" }}
+                />
+              </div>
+            ) : candidates.length === 0 ? (
+              <div
+                className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+                data-ocid="match.empty_state"
+              >
+                <div
+                  className="w-20 h-20 rounded-full flex items-center justify-center"
+                  style={{ background: "oklch(0.20 0.018 15)" }}
                 >
-                  <img
-                    src={m.avatarUrl}
-                    alt=""
-                    className="w-full h-full rounded-full object-cover"
-                  />
+                  <Zap size={36} style={{ color: "oklch(0.55 0.010 15)" }} />
                 </div>
-                <span className="text-[10px] text-[#E9EEF5] font-semibold max-w-[72px] truncate">
-                  @{m.username}
-                </span>
-                <span className="text-[9px] text-[#22D3EE] bg-[#22D3EE]/10 rounded-full px-2 py-0.5 font-semibold">
-                  Message
-                </span>
-              </button>
-            ))}
+                <p
+                  className="font-bold"
+                  style={{ color: "oklch(0.94 0.008 60)" }}
+                >
+                  You've seen everyone!
+                </p>
+                <p
+                  className="text-sm text-center"
+                  style={{ color: "oklch(0.55 0.010 15)" }}
+                >
+                  Check back later for new people
+                </p>
+              </div>
+            ) : (
+              <div className="absolute inset-0">
+                {candidates.slice(-3).map((user, i, arr) => (
+                  <SwipeCard
+                    key={user.principal}
+                    user={user}
+                    isTop={i === arr.length - 1}
+                    index={arr.length - 1 - i}
+                    onSwipeLeft={handleSwipeLeft}
+                    onSwipeRight={handleSwipeRight}
+                  />
+                ))}
+              </div>
+            )}
           </div>
+
+          {!loading && candidates.length > 0 && (
+            <div className="shrink-0 flex items-center justify-center gap-6 py-4">
+              <button
+                type="button"
+                onClick={handleSwipeLeft}
+                className="w-16 h-16 rounded-full flex items-center justify-center active:scale-90 transition-all"
+                style={{
+                  background: "oklch(0.15 0.018 15)",
+                  border: "2px solid oklch(0.65 0.22 10 / 0.6)",
+                  boxShadow: "0 8px 24px oklch(0.65 0.22 10 / 0.2)",
+                }}
+                data-ocid="match.nope.button"
+              >
+                <X size={26} style={{ color: "oklch(0.65 0.22 10)" }} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSwipeRight}
+                className="w-20 h-20 rounded-full flex items-center justify-center active:scale-90 transition-all"
+                style={{
+                  background:
+                    "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                  boxShadow: "0 8px 30px oklch(0.65 0.22 10 / 0.5)",
+                }}
+                data-ocid="match.request.button"
+              >
+                <Star
+                  size={30}
+                  style={{ color: "oklch(0.98 0 0)" }}
+                  className="fill-current"
+                />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSwipeRight}
+                className="w-16 h-16 rounded-full flex items-center justify-center active:scale-90 transition-all"
+                style={{
+                  background: "oklch(0.15 0.018 15)",
+                  border: "2px solid oklch(0.72 0.20 145 / 0.6)",
+                  boxShadow: "0 8px 24px oklch(0.72 0.20 145 / 0.2)",
+                }}
+                data-ocid="match.like.button"
+              >
+                <Heart
+                  size={26}
+                  style={{ color: "oklch(0.72 0.20 145)" }}
+                  className="fill-current"
+                />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* REQUESTS */}
+      {activeTab === "requests" && (
+        <div
+          className="flex-1 overflow-y-auto px-4 py-4"
+          data-ocid="match.requests.list"
+        >
+          <p
+            className="text-sm font-semibold mb-4"
+            style={{ color: "oklch(0.60 0.010 15)" }}
+          >
+            Match Requests
+          </p>
+          {matches.length === 0 ? (
+            <div
+              className="text-center py-16"
+              data-ocid="match.requests.empty_state"
+            >
+              <div className="text-5xl mb-3">💌</div>
+              <p style={{ color: "oklch(0.60 0.010 15)" }}>No requests yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {matches.slice(0, 5).map((m, i) => (
+                <motion.div
+                  key={m.principal}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  className="flex items-center gap-3 p-3 rounded-2xl"
+                  style={{
+                    background: "oklch(0.15 0.018 15)",
+                    border: "1px solid oklch(0.22 0.018 15)",
+                  }}
+                  data-ocid={`match.request.item.${i + 1}`}
+                >
+                  <GradientRing size={52}>
+                    <img
+                      src={m.avatarUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </GradientRing>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="font-bold text-sm"
+                      style={{ color: "oklch(0.94 0.008 60)" }}
+                    >
+                      @{m.username}
+                    </p>
+                    <p
+                      className="text-xs"
+                      style={{ color: "oklch(0.55 0.010 15)" }}
+                    >
+                      Wants to connect
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenChat(m.principal, m.username, m.avatarUrl)
+                      }
+                      className="px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform"
+                      style={{
+                        background:
+                          "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                        color: "oklch(0.98 0 0)",
+                      }}
+                      data-ocid={`match.request.accept.${i + 1}`}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform"
+                      style={{
+                        border: "1px solid oklch(0.28 0.020 15)",
+                        color: "oklch(0.60 0.010 15)",
+                      }}
+                      data-ocid={`match.request.decline.${i + 1}`}
+                    >
+                      Decline
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* It's a Match overlay */}
-      <AnimatePresence>
-        {matchOverlay && (
-          <motion.div
-            className="absolute inset-0 z-50 flex flex-col items-center justify-center"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              background:
-                "linear-gradient(135deg, #1a0010 0%, #0f0a1e 50%, #001a1a 100%)",
-            }}
-            data-ocid="match.dialog"
+      {/* MATCHES */}
+      {activeTab === "matches" && (
+        <div
+          className="flex-1 overflow-y-auto px-4 py-4"
+          data-ocid="match.matches.list"
+        >
+          <p
+            className="text-sm font-semibold mb-4"
+            style={{ color: "oklch(0.60 0.010 15)" }}
           >
-            {/* Confetti particles */}
-            {Array.from({ length: 20 }).map((_, i) => (
-              <motion.div
-                // biome-ignore lint/suspicious/noArrayIndexKey: confetti
-                key={i}
-                className="absolute w-2 h-2 rounded-full"
-                style={{
-                  background:
-                    i % 3 === 0
-                      ? "#FF3B5C"
-                      : i % 3 === 1
-                        ? "#22D3EE"
-                        : "#FFD700",
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                }}
-                initial={{ opacity: 0, scale: 0, y: 0 }}
-                animate={{
-                  opacity: [0, 1, 1, 0],
-                  scale: [0, 1.5, 1, 0],
-                  y: [-20, -80],
-                }}
-                transition={{
-                  duration: 1.5,
-                  delay: Math.random() * 0.5,
-                  repeat: 2,
-                }}
-              />
-            ))}
-
-            <motion.div
-              initial={{ scale: 0, y: 40 }}
-              animate={{ scale: 1, y: 0 }}
-              transition={{ type: "spring", damping: 12 }}
-              className="flex flex-col items-center gap-6 px-8"
+            {matches.length} Match{matches.length !== 1 ? "es" : ""}
+          </p>
+          {matches.length === 0 ? (
+            <div
+              className="text-center py-16"
+              data-ocid="match.matches.empty_state"
             >
-              <div className="text-6xl">\uD83D\uDCAB</div>
-              <div className="text-center">
-                <h2 className="text-4xl font-black bg-gradient-to-r from-[#FF3B5C] via-[#FF8C69] to-[#22D3EE] bg-clip-text text-transparent">
-                  It's a Match!
-                </h2>
-                <p className="text-white/70 mt-2">
-                  You and @{matchOverlay.username} liked each other
-                </p>
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#FF3B5C] shadow-xl">
-                  <img
-                    src={
-                      myAvatarRef.current || "https://i.pravatar.cc/100?u=me"
-                    }
-                    alt="You"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <Heart size={28} className="text-[#FF3B5C] fill-[#FF3B5C]" />
-                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-[#22D3EE] shadow-xl">
-                  <img
-                    src={matchOverlay.avatarUrl}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2 w-full">
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setMatchOverlay(null)}
-                    className="flex-1 px-4 py-3 rounded-2xl border border-white/20 text-white font-semibold text-sm active:scale-95 transition-transform"
-                    data-ocid="match.continue.button"
-                  >
-                    Keep Swiping
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMatchOverlay(null);
-                      onOpenChat(
-                        matchOverlay.principal,
-                        matchOverlay.username,
-                        matchOverlay.avatarUrl,
-                      );
-                    }}
-                    className="flex-1 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white font-bold text-sm active:scale-95 transition-transform"
-                    data-ocid="match.send_message.button"
-                  >
-                    Send Message
-                  </button>
-                </div>
+              <div className="text-5xl mb-3">❤️</div>
+              <p style={{ color: "oklch(0.60 0.010 15)" }}>No matches yet</p>
+              <p
+                className="text-sm mt-1"
+                style={{ color: "oklch(0.45 0.008 15)" }}
+              >
+                Start swiping to find your match
+              </p>
+            </div>
+          ) : (
+            <div
+              className="flex gap-3 overflow-x-auto pb-2 no-scrollbar"
+              style={{ scrollSnapType: "x mandatory" }}
+            >
+              {matches.map((m) => (
                 <button
+                  key={m.principal}
                   type="button"
-                  onClick={() => setMatchOverlay(null)}
-                  className="w-full px-4 py-2.5 rounded-2xl border border-[#22D3EE]/30 text-[#22D3EE] font-semibold text-sm active:scale-95 transition-transform"
-                  data-ocid="match.view_profile.button"
+                  onClick={() => setViewingMatchProfile(m)}
+                  className="flex flex-col items-center gap-2 shrink-0 rounded-2xl p-3 w-[88px] active:scale-95 transition-transform"
+                  style={{
+                    background: "oklch(0.15 0.018 15)",
+                    border: "1px solid oklch(0.22 0.018 15)",
+                    scrollSnapAlign: "start",
+                  }}
+                  data-ocid="match.match.button"
                 >
-                  View Profile
+                  <GradientRing size={52}>
+                    <img
+                      src={m.avatarUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </GradientRing>
+                  <p
+                    className="text-[10px] font-semibold text-center truncate w-full"
+                    style={{ color: "oklch(0.94 0.008 60)" }}
+                  >
+                    @{m.username}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenChat(m.principal, m.username, m.avatarUrl);
+                    }}
+                    className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, oklch(0.65 0.22 10), oklch(0.55 0.20 340))",
+                    }}
+                    data-ocid="match.match.message.button"
+                  >
+                    <MessageCircle
+                      size={13}
+                      style={{ color: "oklch(0.98 0 0)" }}
+                    />
+                  </button>
                 </button>
-              </div>
-            </motion.div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Match overlay */}
+      <MatchOverlay
+        show={!!matchOverlay}
+        username={matchOverlay?.username ?? ""}
+        avatarUrl={matchOverlay?.avatarUrl ?? ""}
+        myAvatar={
+          myAvatarRef.current ||
+          `https://i.pravatar.cc/100?u=${identity?.getPrincipal().toString()}`
+        }
+        onMessage={() => {
+          const m = matchOverlay;
+          setMatchOverlay(null);
+          if (m) onOpenChat(m.principal, m.username, m.avatarUrl);
+        }}
+        onClose={() => setMatchOverlay(null)}
+      />
+
+      {/* Full UserProfile overlay */}
+      <AnimatePresence>
+        {viewingMatchProfile && (
+          <motion.div
+            key="match-profile"
+            className="fixed inset-0 z-[55]"
+            style={{ background: "oklch(0.10 0.012 15)" }}
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          >
+            <UserProfilePage
+              creatorId={viewingMatchProfile.principal}
+              onBack={() => setViewingMatchProfile(null)}
+              onOpenChat={(principal, username, avatarUrl) => {
+                setViewingMatchProfile(null);
+                onOpenChat(principal, username, avatarUrl);
+              }}
+            />
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Match Profile Modal */}
-      {profileModalMatch && (
-        <MatchProfileModal
-          match={profileModalMatch}
-          onMessage={() => {
-            const m = profileModalMatch;
-            setProfileModalMatch(null);
-            onOpenChat(m.principal, m.username, m.avatarUrl);
-          }}
-          onClose={() => setProfileModalMatch(null)}
-        />
-      )}
-
-      {/* Full UserProfile overlay from match list */}
-      {viewingMatchProfile && (
-        <motion.div
-          className="fixed inset-0 z-[55] bg-[#0F1216]"
-          initial={{ x: "100%" }}
-          animate={{ x: 0 }}
-          exit={{ x: "100%" }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        >
-          <UserProfilePage
-            creatorId={viewingMatchProfile.principal}
-            onBack={() => setViewingMatchProfile(null)}
-            onOpenChat={(principal, username, avatarUrl) => {
-              setViewingMatchProfile(null);
-              onOpenChat(principal, username, avatarUrl);
-            }}
-          />
-        </motion.div>
-      )}
     </div>
   );
 }

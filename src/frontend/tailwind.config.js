@@ -15,6 +15,10 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Figtree", "system-ui", "sans-serif"],
+        display: ["Playfair Display", "Georgia", "serif"],
+      },
       colors: {
         border: "oklch(var(--border))",
         input: "oklch(var(--input))",
@@ -49,6 +53,11 @@ export default {
           DEFAULT: "oklch(var(--card))",
           foreground: "oklch(var(--card-foreground))",
         },
+        love: {
+          primary: "oklch(0.65 0.22 10)",
+          secondary: "oklch(0.55 0.20 340)",
+          gold: "oklch(0.78 0.14 75)",
+        },
         chart: {
           1: "oklch(var(--chart-1))",
           2: "oklch(var(--chart-2))",
@@ -74,6 +83,8 @@ export default {
       },
       boxShadow: {
         xs: "0 1px 2px 0 rgba(0,0,0,0.05)",
+        love: "0 0 20px oklch(0.65 0.22 10 / 0.4)",
+        gold: "0 0 20px oklch(0.78 0.14 75 / 0.4)",
       },
       keyframes: {
         "accordion-down": {
