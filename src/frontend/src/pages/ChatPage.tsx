@@ -1,6 +1,7 @@
-import { ArrowLeft, Send } from "lucide-react";
+import { ArrowLeft, Phone, Send, Video } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
+import CallOverlay from "../components/CallOverlay";
 import { useBackend } from "../hooks/useBackend";
 import { timeAgo } from "../types/app";
 
@@ -27,6 +28,8 @@ export default function ChatPage({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
+  const [callType, setCallType] = useState<"video" | "voice">("video");
   const bottomRef = useRef<HTMLDivElement>(null);
   const myPrincipal = identity?.getPrincipal().toString() ?? "";
 
@@ -84,6 +87,16 @@ export default function ChatPage({
     }
   };
 
+  const openVideoCall = () => {
+    setCallType("video");
+    setCallOpen(true);
+  };
+
+  const openVoiceCall = () => {
+    setCallType("voice");
+    setCallOpen(true);
+  };
+
   return (
     <motion.div
       className="fixed inset-0 z-50 flex flex-col bg-[#0F1216]"
@@ -98,7 +111,7 @@ export default function ChatPage({
         <button
           type="button"
           onClick={onBack}
-          className="w-9 h-9 rounded-full flex items-center justify-center"
+          className="w-9 h-9 rounded-full flex items-center justify-center active:scale-90 transition-transform"
           data-ocid="chat.back.button"
         >
           <ArrowLeft size={20} className="text-[#E9EEF5]" />
@@ -108,10 +121,29 @@ export default function ChatPage({
           alt=""
           className="w-9 h-9 rounded-full object-cover border border-[#2A3038]"
         />
-        <div>
+        <div className="flex-1">
           <p className="font-semibold text-sm text-[#E9EEF5]">@{username}</p>
-          <p className="text-[10px] text-[#8B95A3]">VibeFlow match</p>
+          <p className="text-[10px] text-[#22C55E]">Online</p>
         </div>
+        {/* Call buttons */}
+        <button
+          type="button"
+          onClick={openVoiceCall}
+          className="w-9 h-9 rounded-full bg-[#1A1F26] flex items-center justify-center active:scale-90 transition-transform"
+          aria-label="Voice call"
+          data-ocid="chat.voice_call.button"
+        >
+          <Phone size={16} className="text-[#22D3EE]" />
+        </button>
+        <button
+          type="button"
+          onClick={openVideoCall}
+          className="w-9 h-9 rounded-full bg-[#1A1F26] flex items-center justify-center active:scale-90 transition-transform"
+          aria-label="Video call"
+          data-ocid="chat.video_call.button"
+        >
+          <Video size={16} className="text-[#22D3EE]" />
+        </button>
       </header>
 
       {/* Messages */}
@@ -172,6 +204,16 @@ export default function ChatPage({
           <Send size={17} className="text-black" />
         </button>
       </div>
+
+      {/* Call Overlay */}
+      <CallOverlay
+        open={callOpen}
+        username={username}
+        avatarUrl={avatarUrl}
+        callType={callType}
+        onDecline={() => setCallOpen(false)}
+        onAccept={() => setCallOpen(false)}
+      />
     </motion.div>
   );
 }

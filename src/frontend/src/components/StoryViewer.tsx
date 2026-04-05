@@ -31,7 +31,14 @@ interface StoryComment {
   createdAt: bigint;
 }
 
-const EMOJIS = ["❤️", "😂", "😮", "😢", "👏", "🔥"];
+const EMOJIS = [
+  "\u2764\uFE0F",
+  "\uD83D\uDE02",
+  "\uD83D\uDE2E",
+  "\uD83D\uDE22",
+  "\uD83D\uDC4F",
+  "\uD83D\uDD25",
+];
 
 function timeAgo(ns: bigint): string {
   const ms = Number(ns / 1_000_000n);
@@ -79,6 +86,9 @@ export default function StoryViewer({
   );
   const [showEmojiBar, setShowEmojiBar] = useState(false);
 
+  // Poll state
+  const [pollVote, setPollVote] = useState<string | null>(null);
+
   // Comments
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [comments, setComments] = useState<StoryComment[]>([]);
@@ -95,7 +105,7 @@ export default function StoryViewer({
     if (!backend || !creatorId) return;
     const load = async () => {
       try {
-        const { Principal } = await import("@dfinity/principal");
+        const { Principal } = await import("@icp-sdk/core/principal");
         const profileOpt = await backend.getProfile(
           Principal.fromText(creatorId),
         );
@@ -124,6 +134,7 @@ export default function StoryViewer({
     setReactionCounts({});
     setShowEmojiBar(false);
     setCommentsOpen(false);
+    setPollVote(null);
     const load = async () => {
       const key = current.mediaKey;
       if (!key?.startsWith("sha256:")) {
@@ -447,7 +458,7 @@ export default function StoryViewer({
               myReaction ? "bg-white/20 border border-white/40" : "bg-black/40"
             }`}
           >
-            {myReaction ?? "😊"}
+            {myReaction ?? "\uD83D\uDE0A"}
           </div>
           {Object.keys(reactionCounts).length > 0 && (
             <span className="text-white text-[10px] font-bold">
@@ -560,6 +571,53 @@ export default function StoryViewer({
         )}
       </AnimatePresence>
 
+      {/* Poll Sticker */}
+      <div className="absolute top-1/2 left-4 right-16 -translate-y-1/2 z-40 pointer-events-auto">
+        <div className="bg-black/60 backdrop-blur-md rounded-2xl border border-white/15 p-4">
+          <p className="text-white font-bold text-sm text-center mb-3">
+            Which do you prefer?
+          </p>
+          <div className="space-y-2">
+            {["Option A", "Option B"].map((opt) => {
+              const votes = opt.includes("A") ? 62 : 38;
+              const isSelected = pollVote === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPollVote(opt);
+                  }}
+                  className={`w-full relative rounded-xl overflow-hidden border transition-all ${
+                    isSelected ? "border-[#22D3EE]" : "border-white/20"
+                  }`}
+                >
+                  {pollVote && (
+                    <div
+                      className={`absolute top-0 left-0 bottom-0 rounded-xl ${
+                        isSelected ? "bg-[#22D3EE]/30" : "bg-white/10"
+                      }`}
+                      style={{ width: `${votes}%` }}
+                    />
+                  )}
+                  <div className="relative flex items-center justify-between px-3 py-2.5">
+                    <span className="text-white text-sm font-semibold">
+                      {opt}
+                    </span>
+                    {pollVote && (
+                      <span className="text-white text-xs font-bold">
+                        {votes}%
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Bottom info */}
       <div className="absolute bottom-0 left-0 right-0 z-40 px-4 pb-8 pt-16 bg-gradient-to-t from-black/80 to-transparent pointer-events-auto">
         <div className="flex items-center gap-2 mb-2">
@@ -625,7 +683,7 @@ export default function StoryViewer({
                 type="button"
                 onClick={() => setCommentsOpen(false)}
                 className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center"
-                data-ocid="story_viewer.close_button"
+                data-ocid="story_viewer.comments.close_button"
               >
                 <X size={14} className="text-white" />
               </button>

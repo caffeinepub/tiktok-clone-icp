@@ -1,5 +1,5 @@
 import type { Principal } from "@icp-sdk/core/principal";
-import { Heart, MessageCircle, Users, X, Zap } from "lucide-react";
+import { Heart, MessageCircle, Users, Video, X, Zap } from "lucide-react";
 import {
   AnimatePresence,
   motion,
@@ -42,6 +42,23 @@ interface MatchRecord {
   photoCount?: number;
 }
 
+// Parse niche tags from bio
+function parseTags(bio: string): string[] {
+  const m = bio.match(/\|\s*tags:([^|]+)/);
+  if (!m) return [];
+  return m[1]
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
+const TAG_COLORS = [
+  "bg-[#22D3EE]/20 text-[#22D3EE] border-[#22D3EE]/30",
+  "bg-[#FF3B5C]/20 text-[#FF3B5C] border-[#FF3B5C]/30",
+  "bg-[#9333EA]/20 text-[#9333EA] border-[#9333EA]/30",
+];
+
 function SwipeCard({
   user,
   onSwipeLeft,
@@ -72,6 +89,7 @@ function SwipeCard({
   };
 
   const totalContent = user.videoCount + user.photoCount;
+  const nicheTags = parseTags(user.bio);
 
   return (
     <motion.div
@@ -85,7 +103,9 @@ function SwipeCard({
       drag={isTop ? "x" : false}
       dragConstraints={{ left: 0, right: 0 }}
       onDragEnd={handleDragEnd}
-      className="absolute inset-x-4 top-0 h-full rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing shadow-2xl"
+      className={`absolute inset-x-4 top-0 h-full rounded-3xl overflow-hidden cursor-grab active:cursor-grabbing ${
+        isTop ? "shadow-[0_20px_60px_rgba(0,0,0,0.8)]" : "shadow-2xl"
+      }`}
       data-ocid={isTop ? "match.card" : undefined}
     >
       {/* Background image */}
@@ -98,12 +118,22 @@ function SwipeCard({
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
       </div>
 
+      {/* Video indicator badge */}
+      {user.videoCount > 0 && (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-black/60 rounded-full px-2 py-1">
+          <Video size={10} className="text-white" />
+          <span className="text-white text-[10px] font-semibold">
+            {user.videoCount} video{user.videoCount !== 1 ? "s" : ""}
+          </span>
+        </div>
+      )}
+
       {/* Like / Nope stamps */}
       {isTop && (
         <>
           <motion.div
             style={{ opacity: likeOpacity }}
-            className="absolute top-10 left-6 border-4 border-[#22D3EE] rounded-xl px-4 py-2 rotate-[-20deg]"
+            className="absolute top-10 left-6 border-4 border-[#22D3EE] rounded-xl px-4 py-2 rotate-[-20deg] z-10"
           >
             <span className="text-[#22D3EE] font-black text-2xl tracking-widest">
               LIKE
@@ -111,7 +141,7 @@ function SwipeCard({
           </motion.div>
           <motion.div
             style={{ opacity: nopeOpacity }}
-            className="absolute top-10 right-6 border-4 border-[#FF3B5C] rounded-xl px-4 py-2 rotate-[20deg]"
+            className="absolute top-10 right-6 border-4 border-[#FF3B5C] rounded-xl px-4 py-2 rotate-[20deg] z-10"
           >
             <span className="text-[#FF3B5C] font-black text-2xl tracking-widest">
               NOPE
@@ -123,7 +153,7 @@ function SwipeCard({
       {/* User info */}
       <div className="absolute bottom-0 left-0 right-0 p-5">
         {/* Stats bar */}
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <div className="flex items-center gap-1.5 bg-black/60 rounded-full px-3 py-1">
             <Users size={12} className="text-[#22D3EE]" />
             <span className="text-white text-[11px] font-semibold">
@@ -151,8 +181,24 @@ function SwipeCard({
             <h2 className="text-white text-2xl font-black">@{user.username}</h2>
             {user.bio && (
               <p className="text-white/80 text-sm mt-1 line-clamp-2">
-                {user.bio}
+                {user.bio.replace(/\|[^|]+/g, "").trim()}
               </p>
+            )}
+
+            {/* Niche tags */}
+            {nicheTags.length > 0 && (
+              <div className="flex gap-1.5 mt-2 flex-wrap">
+                {nicheTags.map((tag, ti) => (
+                  <span
+                    key={tag}
+                    className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${
+                      TAG_COLORS[ti % TAG_COLORS.length]
+                    }`}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -210,7 +256,7 @@ function MatchProfileModal({
               </h3>
               {match.bio && (
                 <p className="text-[#8B95A3] text-sm mt-1 line-clamp-2">
-                  {match.bio}
+                  {match.bio.replace(/\|[^|]+/g, "").trim()}
                 </p>
               )}
             </div>
@@ -249,7 +295,7 @@ function MatchProfileModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3.5 rounded-2xl border border-[#2A3038] text-[#E9EEF5] font-semibold text-sm"
+              className="flex-1 py-3.5 rounded-2xl border border-[#2A3038] text-[#E9EEF5] font-semibold text-sm active:scale-95 transition-transform"
               data-ocid="match.profile.close_button"
             >
               Close
@@ -257,7 +303,7 @@ function MatchProfileModal({
             <button
               type="button"
               onClick={onMessage}
-              className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white font-bold text-sm flex items-center justify-center gap-2"
+              className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform"
               data-ocid="match.profile.primary_button"
             >
               <MessageCircle size={16} /> Message
@@ -314,42 +360,7 @@ export default function MatchPage({
           backend.getMatches().catch(() => []),
         ]);
 
-        // Resolve candidates with details
-        const resolved: MatchUser[] = await Promise.all(
-          (rawCandidates as any[]).map(async (u) => {
-            const pStr =
-              typeof u.principal === "object"
-                ? u.principal.toString()
-                : String(u.principal);
-            let avatarUrl =
-              u.avatarKey || `https://i.pravatar.cc/150?u=${pStr}`;
-            if (thumbStorageClient && avatarUrl.startsWith("sha256:")) {
-              try {
-                avatarUrl = await thumbStorageClient.getDirectURL(avatarUrl);
-              } catch {}
-            }
-            const [videos, photos, details] = await Promise.all([
-              backend.getUserVideos(u.principal).catch(() => []),
-              backend.getUserPhotos(u.principal).catch(() => []),
-              backend.getCandidateDetails(u.principal).catch(() => null),
-            ]);
-            return {
-              principal: pStr,
-              principalObj: u.principal,
-              username: u.username,
-              bio: u.bio,
-              avatarUrl,
-              videoCount: (videos as any[]).length,
-              photoCount: (photos as any[]).length,
-              followerCount: details?.followerCount ?? 0n,
-              followingCount: details?.followingCount ?? 0n,
-              mutualCount: details?.mutualCount ?? 0n,
-            };
-          }),
-        );
-        setCandidates(resolved);
-
-        // Resolve matches
+        // Resolve matches first so we can deduplicate candidates
         const resolvedMatches: MatchRecord[] = await Promise.all(
           (rawMatches as any[]).map(async (m) => {
             const myPStr = myPrincipal.toString();
@@ -388,6 +399,51 @@ export default function MatchPage({
           }),
         );
         setMatches(resolvedMatches);
+
+        // Build a set of already-matched principals
+        const matchedSet = new Set(resolvedMatches.map((m) => m.principal));
+        // Also exclude self
+        matchedSet.add(myPrincipal.toString());
+
+        // Resolve candidates with details
+        const resolved: MatchUser[] = await Promise.all(
+          (rawCandidates as any[]).map(async (u) => {
+            const pStr =
+              typeof u.principal === "object"
+                ? u.principal.toString()
+                : String(u.principal);
+            let avatarUrl =
+              u.avatarKey || `https://i.pravatar.cc/150?u=${pStr}`;
+            if (thumbStorageClient && avatarUrl.startsWith("sha256:")) {
+              try {
+                avatarUrl = await thumbStorageClient.getDirectURL(avatarUrl);
+              } catch {}
+            }
+            const [videos, photos, details] = await Promise.all([
+              backend.getUserVideos(u.principal).catch(() => []),
+              backend.getUserPhotos(u.principal).catch(() => []),
+              backend.getCandidateDetails(u.principal).catch(() => null),
+            ]);
+            return {
+              principal: pStr,
+              principalObj: u.principal,
+              username: u.username,
+              bio: u.bio,
+              avatarUrl,
+              videoCount: (videos as any[]).length,
+              photoCount: (photos as any[]).length,
+              followerCount: details?.followerCount ?? 0n,
+              followingCount: details?.followingCount ?? 0n,
+              mutualCount: details?.mutualCount ?? 0n,
+            };
+          }),
+        );
+
+        // Filter out already-matched users and self to avoid duplicates
+        const filteredCandidates = resolved.filter(
+          (u) => !matchedSet.has(u.principal),
+        );
+        setCandidates(filteredCandidates);
       } catch {}
       setLoading(false);
     };
@@ -471,7 +527,7 @@ export default function MatchPage({
             className="absolute inset-0 flex items-center justify-center"
             data-ocid="match.loading_state"
           >
-            <div className="w-8 h-8 rounded-full border-2 border-[#FF3B5C] border-t-transparent animate-spin" />
+            <div className="w-16 h-16 rounded-2xl bg-[#1A1F26] animate-pulse" />
           </div>
         ) : candidates.length === 0 ? (
           <div
@@ -502,21 +558,24 @@ export default function MatchPage({
         )}
       </div>
 
-      {/* Action buttons */}
+      {/* Action buttons — large round NOPE/LIKE below card */}
       {!loading && candidates.length > 0 && (
-        <div className="shrink-0 flex items-center justify-center gap-8 py-4">
+        <div className="shrink-0 flex items-center justify-center gap-10 py-4">
           <button
             type="button"
             onClick={handleSwipeLeft}
-            className="w-16 h-16 rounded-full bg-[#1A1F26] border-2 border-[#FF3B5C] flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+            className="w-16 h-16 rounded-full bg-[#1A1F26] border-2 border-[#FF3B5C] flex items-center justify-center shadow-xl active:scale-90 transition-transform select-none"
+            style={{ boxShadow: "0 8px 24px rgba(255,59,92,0.25)" }}
             data-ocid="match.nope.button"
           >
             <X size={28} className="text-[#FF3B5C]" />
           </button>
+
           <button
             type="button"
             onClick={handleSwipeRight}
-            className="w-16 h-16 rounded-full bg-[#1A1F26] border-2 border-[#22D3EE] flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+            className="w-16 h-16 rounded-full bg-[#1A1F26] border-2 border-[#22D3EE] flex items-center justify-center shadow-xl active:scale-90 transition-transform select-none"
+            style={{ boxShadow: "0 8px 24px rgba(34,211,238,0.25)" }}
             data-ocid="match.like.button"
           >
             <Heart size={28} className="text-[#22D3EE] fill-[#22D3EE]" />
@@ -524,30 +583,39 @@ export default function MatchPage({
         </div>
       )}
 
-      {/* My Matches horizontal scroll */}
+      {/* My Matches — horizontal card scroll */}
       {matches.length > 0 && (
         <div className="shrink-0 px-4 pb-4">
-          <p className="text-xs text-[#8B95A3] uppercase tracking-widest font-semibold mb-2">
+          <p className="text-xs text-[#8B95A3] uppercase tracking-widest font-semibold mb-3">
             Matches
           </p>
-          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar [&::-webkit-scrollbar]:hidden">
             {matches.map((m) => (
               <button
                 key={m.principal}
                 type="button"
                 onClick={() => setViewingMatchProfile(m)}
-                className="flex flex-col items-center gap-1 shrink-0"
+                className="flex flex-col items-center gap-2 shrink-0 bg-[#1A1F26] rounded-2xl p-3 w-[88px] border border-[#2A3038] active:scale-95 transition-transform"
                 data-ocid="match.match.button"
               >
-                <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#FF3B5C]">
+                <div
+                  className="w-12 h-12 rounded-full overflow-hidden border-2 p-[2px]"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #FF3B5C, #FF8C69, #22D3EE)",
+                  }}
+                >
                   <img
                     src={m.avatarUrl}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full rounded-full object-cover"
                   />
                 </div>
-                <span className="text-[10px] text-[#A6B0BC] max-w-[56px] truncate">
+                <span className="text-[10px] text-[#E9EEF5] font-semibold max-w-[72px] truncate">
                   @{m.username}
+                </span>
+                <span className="text-[9px] text-[#22D3EE] bg-[#22D3EE]/10 rounded-full px-2 py-0.5 font-semibold">
+                  Message
                 </span>
               </button>
             ))}
@@ -605,7 +673,7 @@ export default function MatchPage({
               transition={{ type: "spring", damping: 12 }}
               className="flex flex-col items-center gap-6 px-8"
             >
-              <div className="text-6xl">💫</div>
+              <div className="text-6xl">\uD83D\uDCAB</div>
               <div className="text-center">
                 <h2 className="text-4xl font-black bg-gradient-to-r from-[#FF3B5C] via-[#FF8C69] to-[#22D3EE] bg-clip-text text-transparent">
                   It's a Match!
@@ -640,7 +708,7 @@ export default function MatchPage({
                   <button
                     type="button"
                     onClick={() => setMatchOverlay(null)}
-                    className="flex-1 px-4 py-3 rounded-2xl border border-white/20 text-white font-semibold text-sm"
+                    className="flex-1 px-4 py-3 rounded-2xl border border-white/20 text-white font-semibold text-sm active:scale-95 transition-transform"
                     data-ocid="match.continue.button"
                   >
                     Keep Swiping
@@ -655,7 +723,7 @@ export default function MatchPage({
                         matchOverlay.avatarUrl,
                       );
                     }}
-                    className="flex-1 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white font-bold text-sm"
+                    className="flex-1 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#FF3B5C] to-[#22D3EE] text-white font-bold text-sm active:scale-95 transition-transform"
                     data-ocid="match.send_message.button"
                   >
                     Send Message
@@ -664,7 +732,7 @@ export default function MatchPage({
                 <button
                   type="button"
                   onClick={() => setMatchOverlay(null)}
-                  className="w-full px-4 py-2.5 rounded-2xl border border-[#22D3EE]/30 text-[#22D3EE] font-semibold text-sm"
+                  className="w-full px-4 py-2.5 rounded-2xl border border-[#22D3EE]/30 text-[#22D3EE] font-semibold text-sm active:scale-95 transition-transform"
                   data-ocid="match.view_profile.button"
                 >
                   View Profile

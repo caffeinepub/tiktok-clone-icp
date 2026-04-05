@@ -4,8 +4,12 @@ import {
   Compass,
   Heart,
   Home,
+  MessageCircle,
+  Pause,
+  Play,
   Plus,
   User,
+  UserPlus,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
@@ -19,6 +23,7 @@ import ChatPage from "./pages/ChatPage";
 import DuetPage from "./pages/DuetPage";
 import ExplorePage from "./pages/ExplorePage";
 import FeedPage from "./pages/FeedPage";
+import HashtagPage from "./pages/HashtagPage";
 import InboxPage from "./pages/InboxPage";
 import MatchPage from "./pages/MatchPage";
 import PostDetailPage from "./pages/PostDetailPage";
@@ -43,6 +48,13 @@ interface NotifItem {
   timeMs: number;
   read: boolean;
   videoId?: string | null;
+}
+
+interface MiniPlayerState {
+  videoUrl: string;
+  title: string;
+  creatorUsername: string;
+  thumbUrl: string;
 }
 
 /** Wait up to `timeoutMs` for a value supplier to return non-null/undefined. */
@@ -75,7 +87,7 @@ function waitForValue<T>(
 const typeText = (t: string, videoId: string | null | undefined) => {
   if (t === "like") return videoId ? "liked your video" : "liked something";
   if (t === "comment") return "commented on your video";
-  if (t === "match") return "You matched! 🎉";
+  if (t === "match") return "You matched! \uD83C\uDF89";
   if (t === "follow_request") return "sent you a follow request";
   if (t === "follow_request_accepted") return "accepted your follow request";
   if (t === "story_reaction") return "reacted to your story";
@@ -83,10 +95,21 @@ const typeText = (t: string, videoId: string | null | undefined) => {
   return "started following you";
 };
 
+const notifBorderColor = (t: string) => {
+  if (t === "like") return "border-l-[#FF3B5C]";
+  if (t === "comment" || t === "story_comment") return "border-l-[#22D3EE]";
+  if (t === "follow" || t === "follow_request_accepted")
+    return "border-l-[#3B82F6]";
+  if (t === "match") return "border-l-[#FF8C69]";
+  if (t === "story_reaction") return "border-l-[#A855F7]";
+  return "border-l-[#3B82F6]";
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [viewingCreator, setViewingCreator] = useState<string | null>(null);
   const [viewingPost, setViewingPost] = useState<string | null>(null);
+  const [viewingHashtag, setViewingHashtag] = useState<string | null>(null);
   const [chatState, setChatState] = useState<ChatState | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -104,6 +127,10 @@ export default function App() {
   const [showNotifPanel, setShowNotifPanel] = useState(false);
   const [notifs, setNotifs] = useState<NotifItem[]>([]);
   const [notifsLoading, setNotifsLoading] = useState(false);
+  const [miniPlayer, setMiniPlayer] = useState<MiniPlayerState | null>(null);
+  const [miniPlaying, setMiniPlaying] = useState(true);
+  const miniVideoRef = useRef<HTMLVideoElement>(null);
+  const prevTab = useRef<Tab>("home");
   const { backend, isLoggedIn, login } = useBackend();
   const { isLoginError, loginError } = useInternetIdentity();
   const imageStorageClient = useStorageClient("images");
@@ -185,6 +212,14 @@ export default function App() {
     const interval = setInterval(loadNotifs, 10000);
     return () => clearInterval(interval);
   }, [isLoggedIn, backend, loadNotifs]);
+
+  // Mini player: when leaving home tab while there's a potential video playing
+  useEffect(() => {
+    if (prevTab.current === "home" && activeTab !== "home") {
+      // Don't clear mini player if already set, just keep it
+    }
+    prevTab.current = activeTab;
+  }, [activeTab]);
 
   const handleViewProfile = (creatorId: string) => setViewingCreator(creatorId);
   const handleViewPost = (postId: string) => setViewingPost(postId);
@@ -282,9 +317,14 @@ export default function App() {
     ) {
       setViewingCreator(notif.senderId);
     } else {
-      // navigate to inbox for messages/other
       setActiveTab("inbox");
     }
+  };
+
+  const handleFollowBack = (senderId: string) => {
+    import("@icp-sdk/core/principal").then(({ Principal }) => {
+      backend?.followUser(Principal.fromText(senderId)).catch(() => {});
+    });
   };
 
   if (!isLoggedIn) {
@@ -334,7 +374,7 @@ export default function App() {
                 <p className="text-[#FF3B5C]/80 text-xs text-center mt-1">
                   {loginError?.message?.includes("already authenticated")
                     ? "Session conflict. Please try again."
-                    : "Please try again — tap Get Started below."}
+                    : "Please try again \u2014 tap Get Started below."}
                 </p>
               </motion.div>
             )}
@@ -366,7 +406,7 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-[#0F1216] text-[#E9EEF5] overflow-hidden">
-      {/* Header — only visible on Home tab */}
+      {/* Header \u2014 only visible on Home tab */}
       <AnimatePresence>
         {activeTab === "home" && (
           <motion.header
@@ -393,7 +433,16 @@ export default function App() {
                 onClick={() => {
                   setShowNotifPanel(true);
                   setNotifsLoading(true);
-                  loadNotifs().finally(() => setNotifsLoading(false));
+                  loadNotifs()
+                    .then(() => {
+                      // Mark as read when panel opens
+                      backend?.markNotificationsRead().catch(() => {});
+                      setNotifs((prev) =>
+                        prev.map((n) => ({ ...n, read: true })),
+                      );
+                      setUnreadCount(0);
+                    })
+                    .finally(() => setNotifsLoading(false));
                 }}
                 className="relative w-9 h-9 flex items-center justify-center"
                 aria-label="Notifications"
@@ -411,10 +460,10 @@ export default function App() {
                 type="button"
                 onClick={() => setShowUploadModal(true)}
                 data-ocid="header.primary_button"
-                className="w-9 h-9 rounded-full bg-[#22D3EE] flex items-center justify-center"
+                className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"
                 aria-label="Create"
               >
-                <Plus size={20} className="text-black" />
+                <Plus size={20} className="text-white" />
               </button>
             </div>
           </motion.header>
@@ -452,6 +501,7 @@ export default function App() {
         <div className={activeTab === "home" ? "block h-full" : "hidden"}>
           <FeedPage
             onViewProfile={handleViewProfile}
+            onViewHashtag={(tag) => setViewingHashtag(tag)}
             isActive={activeTab === "home"}
             onDuet={(videoId, videoUrl) => setDuetState({ videoId, videoUrl })}
             refreshKey={feedRefreshKey}
@@ -461,6 +511,7 @@ export default function App() {
           <ExplorePage
             onViewProfile={handleViewProfile}
             onViewPost={handleViewPost}
+            onViewHashtag={(tag) => setViewingHashtag(tag)}
             refreshKey={feedRefreshKey}
           />
         </div>
@@ -479,7 +530,7 @@ export default function App() {
       </main>
 
       {/* Bottom nav */}
-      <nav className="shrink-0 flex items-center bg-[#0F1216] border-t border-[#2A3038] pb-safe">
+      <nav className="shrink-0 flex items-center backdrop-blur-lg bg-[#0F1216]/90 border-t border-[#2A3038]/60 pb-safe">
         {(
           [
             { id: "home", icon: Home, label: "Home", badge: 0 },
@@ -529,7 +580,9 @@ export default function App() {
                   ) : null}
                   {label && (
                     <span
-                      className={`text-[10px] mt-0.5 ${isActive ? "text-[#22D3EE]" : "text-[#8B95A3]"}`}
+                      className={`text-[10px] mt-0.5 ${
+                        isActive ? "text-[#22D3EE]" : "text-[#8B95A3]"
+                      }`}
                     >
                       {label}
                     </span>
@@ -595,6 +648,29 @@ export default function App() {
             <UserProfilePage
               creatorId={viewingCreator}
               onBack={() => setViewingCreator(null)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Hashtag Page Overlay */}
+      <AnimatePresence>
+        {viewingHashtag && (
+          <motion.div
+            key="hashtag-page"
+            className="fixed inset-0 z-50 bg-[#0F1216]"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          >
+            <HashtagPage
+              hashtag={viewingHashtag}
+              onBack={() => setViewingHashtag(null)}
+              onViewVideo={(id) => {
+                setViewingHashtag(null);
+                setViewingPost(id);
+              }}
             />
           </motion.div>
         )}
@@ -675,6 +751,85 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Mini Player (Picture-in-Picture) - shows when leaving home */}
+      <AnimatePresence>
+        {miniPlayer && activeTab !== "home" && (
+          <motion.div
+            key="mini-player"
+            className="fixed bottom-[72px] left-0 right-0 z-[55] px-3 pb-1"
+            initial={{ y: "100%", opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: "100%", opacity: 0 }}
+            transition={{ type: "spring", damping: 28, stiffness: 260 }}
+            data-ocid="mini_player.panel"
+          >
+            <div className="bg-[#151920] border border-[#2A3038] rounded-2xl overflow-hidden shadow-2xl">
+              <div className="flex items-center gap-3 p-3">
+                {/* Thumbnail */}
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-[#2A3038] shrink-0">
+                  <img
+                    src={miniPlayer.thumbUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[#E9EEF5] text-xs font-semibold truncate">
+                    {miniPlayer.title}
+                  </p>
+                  <p className="text-[#8B95A3] text-[10px]">
+                    @{miniPlayer.creatorUsername}
+                  </p>
+                </div>
+                {/* Controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMiniPlaying((p) => !p);
+                      if (miniVideoRef.current) {
+                        if (miniPlaying) miniVideoRef.current.pause();
+                        else miniVideoRef.current.play();
+                      }
+                    }}
+                    className="w-8 h-8 rounded-full bg-[#22D3EE]/20 flex items-center justify-center"
+                    data-ocid="mini_player.toggle"
+                  >
+                    {miniPlaying ? (
+                      <Pause size={14} className="text-[#22D3EE]" />
+                    ) : (
+                      <Play
+                        size={14}
+                        className="text-[#22D3EE] fill-[#22D3EE] ml-0.5"
+                      />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMiniPlayer(null)}
+                    className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
+                    data-ocid="mini_player.close_button"
+                  >
+                    <X size={14} className="text-[#8B95A3]" />
+                  </button>
+                </div>
+              </div>
+              {/* Hidden video element */}
+              <video
+                ref={miniVideoRef}
+                src={miniPlayer.videoUrl}
+                className="hidden"
+                autoPlay
+                loop
+                muted
+                playsInline
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Notification Panel */}
       <AnimatePresence>
         {showNotifPanel && (
@@ -694,7 +849,7 @@ export default function App() {
             />
             {/* Panel */}
             <motion.div
-              className="absolute top-0 left-0 right-0 max-h-[80vh] bg-[#151920] rounded-b-3xl border-b border-x border-[#2A3038] flex flex-col overflow-hidden"
+              className="absolute top-0 left-0 right-0 max-h-[85vh] bg-[#151920] rounded-b-3xl border-b border-x border-[#2A3038] flex flex-col overflow-hidden"
               initial={{ y: "-100%" }}
               animate={{ y: 0 }}
               exit={{ y: "-100%" }}
@@ -705,13 +860,31 @@ export default function App() {
                 <h3 className="text-[#E9EEF5] font-bold text-base">
                   Notifications
                 </h3>
-                <button
-                  type="button"
-                  onClick={() => setShowNotifPanel(false)}
-                  className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
-                >
-                  <X size={16} className="text-[#8B95A3]" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {notifs.some((n) => !n.read) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotifs((prev) =>
+                          prev.map((n) => ({ ...n, read: true })),
+                        );
+                        setUnreadCount(0);
+                        backend?.markNotificationsRead().catch(() => {});
+                      }}
+                      className="text-[10px] text-[#22D3EE] font-semibold"
+                      data-ocid="notif_panel.mark_read.button"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowNotifPanel(false)}
+                    className="w-8 h-8 rounded-full bg-[#1A1F26] flex items-center justify-center"
+                  >
+                    <X size={16} className="text-[#8B95A3]" />
+                  </button>
+                </div>
               </div>
 
               {/* Content */}
@@ -728,33 +901,175 @@ export default function App() {
                     </p>
                   </div>
                 ) : (
-                  <div className="px-4 pb-6 space-y-1">
+                  <div className="px-4 pb-6 space-y-2">
                     {notifs.map((n) => (
-                      <button
+                      <div
                         key={n.id}
-                        type="button"
-                        onClick={() => handleNotifClick(n)}
-                        className={`w-full flex items-center gap-3 px-3 py-3 rounded-2xl text-left transition-colors ${
-                          n.read ? "bg-transparent" : "bg-[#1A1F26]"
-                        }`}
+                        className={`w-full flex gap-3 px-3 py-3 rounded-2xl border-l-4 ${notifBorderColor(
+                          n.type,
+                        )} ${n.read ? "bg-[#1A1F26]/40" : "bg-[#1A1F26]"}`}
                       >
-                        <img
-                          src={n.senderAvatar}
-                          alt=""
-                          className="w-10 h-10 rounded-full object-cover shrink-0"
-                        />
+                        {/* Avatar */}
+                        <button
+                          type="button"
+                          onClick={() => handleNotifClick(n)}
+                          className="shrink-0"
+                        >
+                          <img
+                            src={n.senderAvatar}
+                            alt=""
+                            className="w-10 h-10 rounded-full object-cover"
+                          />
+                        </button>
+
+                        {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <p className="text-[#E9EEF5] text-sm font-semibold truncate">
-                            @{n.senderUsername}
-                          </p>
-                          <p className="text-[#8B95A3] text-xs truncate">
-                            {n.text}
-                          </p>
+                          <button
+                            type="button"
+                            onClick={() => handleNotifClick(n)}
+                            className="text-left w-full"
+                          >
+                            <p className="text-[#E9EEF5] text-sm font-semibold truncate">
+                              @{n.senderUsername}
+                            </p>
+                            <p className="text-[#8B95A3] text-xs leading-snug mt-0.5">
+                              {n.type === "like" && (
+                                <span className="flex items-center gap-1">
+                                  <Heart
+                                    size={11}
+                                    className="text-[#FF3B5C] fill-[#FF3B5C] shrink-0"
+                                  />
+                                  liked your video
+                                </span>
+                              )}
+                              {n.type === "comment" && (
+                                <span className="flex items-center gap-1">
+                                  <MessageCircle
+                                    size={11}
+                                    className="text-[#22D3EE] shrink-0"
+                                  />
+                                  commented on your video
+                                </span>
+                              )}
+                              {n.type === "story_comment" && (
+                                <span className="flex items-center gap-1">
+                                  <MessageCircle
+                                    size={11}
+                                    className="text-[#22D3EE] shrink-0"
+                                  />
+                                  commented on your story
+                                </span>
+                              )}
+                              {(n.type === "follow" ||
+                                n.type === "follow_request_accepted") && (
+                                <span className="flex items-center gap-1">
+                                  <UserPlus
+                                    size={11}
+                                    className="text-[#3B82F6] shrink-0"
+                                  />
+                                  {n.type === "follow_request_accepted"
+                                    ? "accepted your follow request"
+                                    : "started following you"}
+                                </span>
+                              )}
+                              {n.type === "match" && (
+                                <span className="flex items-center gap-1">
+                                  <Heart
+                                    size={11}
+                                    className="text-[#FF8C69] fill-[#FF8C69] shrink-0"
+                                  />
+                                  You matched! \uD83C\uDF89
+                                </span>
+                              )}
+                              {n.type === "story_reaction" && (
+                                <span className="flex items-center gap-1">
+                                  <span className="text-xs">
+                                    {n.text?.match(
+                                      /[\u{1F300}-\u{1FAD6}]/u,
+                                    )?.[0] || "\uD83D\uDE0A"}
+                                  </span>
+                                  reacted to your story
+                                </span>
+                              )}
+                              {n.type === "follow_request" && (
+                                <span className="flex items-center gap-1">
+                                  <UserPlus
+                                    size={11}
+                                    className="text-[#22D3EE] shrink-0"
+                                  />
+                                  sent you a follow request
+                                </span>
+                              )}
+                            </p>
+                          </button>
+
+                          {/* Inline action buttons */}
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {n.type === "follow_request" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleFollowBack(n.senderId)}
+                                  className="px-3 py-1 rounded-full bg-[#22D3EE] text-black text-xs font-bold"
+                                  data-ocid="notif.accept.button"
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleNotifClick(n)}
+                                  className="px-3 py-1 rounded-full border border-[#2A3038] text-[#E9EEF5] text-xs font-bold"
+                                  data-ocid="notif.decline.button"
+                                >
+                                  Decline
+                                </button>
+                              </>
+                            )}
+                            {(n.type === "follow" ||
+                              n.type === "follow_request_accepted") && (
+                              <button
+                                type="button"
+                                onClick={() => handleFollowBack(n.senderId)}
+                                className="px-3 py-1 rounded-full bg-[#3B82F6]/20 border border-[#3B82F6]/40 text-[#3B82F6] text-xs font-bold"
+                                data-ocid="notif.follow_back.button"
+                              >
+                                Follow Back
+                              </button>
+                            )}
+                            {n.type === "match" && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowNotifPanel(false);
+                                  handleOpenChat(
+                                    n.senderId,
+                                    n.senderUsername,
+                                    n.senderAvatar,
+                                  );
+                                }}
+                                className="px-3 py-1 rounded-full bg-gradient-to-r from-[#FF3B5C] to-[#FF8C69] text-white text-xs font-bold"
+                                data-ocid="notif.message.button"
+                              >
+                                Message
+                              </button>
+                            )}
+                            {(n.type === "like" || n.type === "comment") && (
+                              <button
+                                type="button"
+                                onClick={() => handleNotifClick(n)}
+                                className="px-3 py-1 rounded-full bg-[#1A1F26] border border-[#2A3038] text-[#8B95A3] text-xs font-semibold"
+                                data-ocid="notif.view.button"
+                              >
+                                View
+                              </button>
+                            )}
+                          </div>
                         </div>
+
                         {!n.read && (
-                          <div className="w-2 h-2 rounded-full bg-[#FF3B5C] shrink-0" />
+                          <div className="w-2 h-2 rounded-full bg-[#FF3B5C] shrink-0 mt-1" />
                         )}
-                      </button>
+                      </div>
                     ))}
                   </div>
                 )}

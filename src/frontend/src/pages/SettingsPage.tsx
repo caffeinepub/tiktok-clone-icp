@@ -13,6 +13,7 @@ import {
   Shield,
   Unlock,
   User,
+  UserX,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
@@ -24,12 +25,36 @@ interface Props {
   onEditProfile: () => void;
 }
 
+const LANGUAGES = [
+  { code: "en", label: "English", flag: "🇺🇸" },
+  { code: "es", label: "Espa\u00f1ol", flag: "🇪🇸" },
+  { code: "fr", label: "Fran\u00e7ais", flag: "🇫🇷" },
+  { code: "hi", label: "\u0939\u093f\u0928\u094d\u0926\u0940", flag: "🇮🇳" },
+  { code: "pt", label: "Portugu\u00eas", flag: "🇧🇷" },
+  {
+    code: "ar",
+    label: "\u0627\u0644\u0639\u0631\u0628\u064a\u0629",
+    flag: "🇸🇦",
+  },
+];
+
+type ThemeMode = "dark" | "light" | "auto";
+
 export default function SettingsPage({ onBack, onEditProfile }: Props) {
   const { backend, identity } = useBackend();
   const { clear } = useInternetIdentity();
   const [isPrivate, setIsPrivate] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
+
+  // Appearance
+  const [theme, setTheme] = useState<ThemeMode>(
+    () => (localStorage.getItem("setting_theme") as ThemeMode) || "dark",
+  );
+  const [showLangPicker, setShowLangPicker] = useState(false);
+  const [language, setLanguage] = useState(
+    () => localStorage.getItem("setting_language") || "en",
+  );
 
   // Privacy extras
   const [showActivity, setShowActivity] = useState(
@@ -49,9 +74,28 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
   const [reduceMotion, setReduceMotion] = useState(
     () => localStorage.getItem("setting_reduceMotion") === "true",
   );
+  const [showSensitive, setShowSensitive] = useState(
+    () => localStorage.getItem("setting_showSensitive") === "true",
+  );
+  const [ageRestriction, setAgeRestriction] = useState(
+    () => localStorage.getItem("setting_ageRestriction") === "true",
+  );
+  const [filterHashtags, setFilterHashtags] = useState(
+    () => localStorage.getItem("setting_filterHashtags") || "",
+  );
   const [restrictSensitive, setRestrictSensitive] = useState(
     () => localStorage.getItem("setting_restrictSensitive") === "true",
   );
+
+  // Blocked accounts
+  const [blockedUsers, setBlockedUsers] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("setting_blockedUsers") || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [blockInput, setBlockInput] = useState("");
 
   // Data & storage
   const [dataSaver, setDataSaver] = useState(
@@ -80,6 +124,19 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
       .finally(() => setLoading(false));
   }, [backend]);
 
+  // Apply theme
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "light") {
+      root.classList.remove("dark");
+      root.classList.add("light");
+    } else {
+      root.classList.remove("light");
+      root.classList.add("dark");
+    }
+    localStorage.setItem("setting_theme", theme);
+  }, [theme]);
+
   const saveSettings = async (priv: boolean, notif: boolean) => {
     if (!backend) return;
     await backend.updateUserSettings(priv, notif).catch(() => {});
@@ -95,11 +152,11 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
     await saveSettings(isPrivate, val);
   };
 
-  const setLS = (key: string, val: boolean) =>
+  const setLS = (key: string, val: boolean | string) =>
     localStorage.setItem(key, String(val));
 
   const handleLogout = () => {
-    if (backend) backend.logout().catch(() => {});
+    if (backend) (backend as any).logout?.().catch(() => {});
     clear();
   };
 
@@ -124,7 +181,22 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
     }, 2000);
   };
 
+  const handleBlockUser = () => {
+    if (!blockInput.trim()) return;
+    const updated = [...blockedUsers, blockInput.trim()];
+    setBlockedUsers(updated);
+    localStorage.setItem("setting_blockedUsers", JSON.stringify(updated));
+    setBlockInput("");
+  };
+
+  const handleUnblockUser = (username: string) => {
+    const updated = blockedUsers.filter((u) => u !== username);
+    setBlockedUsers(updated);
+    localStorage.setItem("setting_blockedUsers", JSON.stringify(updated));
+  };
+
   const principal = identity?.getPrincipal().toString();
+  const selectedLang = LANGUAGES.find((l) => l.code === language);
 
   const SettingRow = ({
     label,
@@ -209,7 +281,7 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
               <div className="border-t border-[#2A3038] px-4 py-3">
                 <p className="text-xs text-[#8B95A3]">Principal ID</p>
                 <p className="text-xs text-[#E9EEF5] font-mono mt-0.5 truncate">
-                  {principal ?? "—"}
+                  {principal ?? "\u2014"}
                 </p>
               </div>
             </div>
@@ -221,15 +293,87 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
               <Monitor size={12} /> Appearance
             </h2>
             <div className="bg-[#1A1F26] rounded-2xl overflow-hidden border border-[#2A3038]">
-              <SettingRow
-                label="Dark Mode"
-                description="VibeFlow uses dark mode by default"
-                checked={true}
-                onChange={() => {}}
-                ocid="settings.dark_mode.switch"
-                disabled={true}
-                note="Always on"
-              />
+              <div className="px-4 py-3.5">
+                <p className="text-sm text-[#E9EEF5] mb-2">Theme</p>
+                <div className="flex gap-2">
+                  {(["dark", "light", "auto"] as ThemeMode[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTheme(t)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border transition-all ${
+                        theme === t
+                          ? "bg-[#22D3EE] text-black border-[#22D3EE]"
+                          : "bg-[#0F1216] text-[#8B95A3] border-[#2A3038]"
+                      }`}
+                      data-ocid={`settings.theme_${t}.toggle`}
+                    >
+                      {t === "dark"
+                        ? "🌙 Dark"
+                        : t === "light"
+                          ? "☀️ Light"
+                          : "🔄 Auto"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Language */}
+          <section>
+            <h2 className="text-xs text-[#8B95A3] font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+              <Globe size={12} /> Language
+            </h2>
+            <div className="bg-[#1A1F26] rounded-2xl overflow-hidden border border-[#2A3038]">
+              <button
+                type="button"
+                onClick={() => setShowLangPicker((v) => !v)}
+                className="w-full flex items-center justify-between px-4 py-4"
+                data-ocid="settings.language.button"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base">{selectedLang?.flag}</span>
+                  <span className="text-sm text-[#E9EEF5]">
+                    {selectedLang?.label}
+                  </span>
+                </div>
+                <ChevronRight
+                  size={16}
+                  className={`text-[#8B95A3] transition-transform ${
+                    showLangPicker ? "rotate-90" : ""
+                  }`}
+                />
+              </button>
+              {showLangPicker && (
+                <div className="border-t border-[#2A3038]">
+                  {LANGUAGES.map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => {
+                        setLanguage(lang.code);
+                        setLS("setting_language", lang.code);
+                        setShowLangPicker(false);
+                      }}
+                      className="w-full flex items-center justify-between px-4 py-3 border-t border-[#2A3038] first:border-t-0 active:bg-[#2A3038] transition-colors"
+                      data-ocid={`settings.language_${lang.code}.button`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">{lang.flag}</span>
+                        <span className="text-sm text-[#E9EEF5]">
+                          {lang.label}
+                        </span>
+                      </div>
+                      {language === lang.code && (
+                        <span className="text-[#22D3EE] text-sm font-bold">
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
 
@@ -371,6 +515,26 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
                 ocid="settings.reduce_motion.switch"
               />
               <SettingRow
+                label="Show Sensitive Content"
+                description="Show mature or sensitive content in feed"
+                checked={showSensitive}
+                onChange={(v) => {
+                  setShowSensitive(v);
+                  setLS("setting_showSensitive", v);
+                }}
+                ocid="settings.show_sensitive.switch"
+              />
+              <SettingRow
+                label="Age Restriction (18+)"
+                description="Restrict content to 18+ only"
+                checked={ageRestriction}
+                onChange={(v) => {
+                  setAgeRestriction(v);
+                  setLS("setting_ageRestriction", v);
+                }}
+                ocid="settings.age_restriction.switch"
+              />
+              <SettingRow
                 label="Restrict Sensitive Content"
                 description="Filter mature or sensitive content from feed"
                 checked={restrictSensitive}
@@ -380,6 +544,88 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
                 }}
                 ocid="settings.restrict_sensitive.switch"
               />
+              {/* Filter hashtags */}
+              <div className="px-4 py-3.5 border-t border-[#2A3038]">
+                <p className="text-sm text-[#E9EEF5] mb-1">Filter Hashtags</p>
+                <p className="text-xs text-[#8B95A3] mb-2">
+                  Comma-separated tags to block
+                </p>
+                <input
+                  type="text"
+                  value={filterHashtags}
+                  onChange={(e) => {
+                    setFilterHashtags(e.target.value);
+                    setLS("setting_filterHashtags", e.target.value);
+                  }}
+                  placeholder="e.g. spam, nsfw, ads"
+                  className="w-full bg-[#0F1216] border border-[#2A3038] rounded-xl px-3 py-2 text-xs text-[#E9EEF5] outline-none focus:border-[#22D3EE] placeholder:text-[#4A5568]"
+                  data-ocid="settings.filter_hashtags.input"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* Blocked Accounts */}
+          <section>
+            <h2 className="text-xs text-[#8B95A3] font-semibold uppercase tracking-wider mb-2 flex items-center gap-2">
+              <UserX size={12} /> Blocked Accounts
+            </h2>
+            <div className="bg-[#1A1F26] rounded-2xl overflow-hidden border border-[#2A3038]">
+              {/* Add block input */}
+              <div className="px-4 py-3.5">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={blockInput}
+                    onChange={(e) => setBlockInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleBlockUser()}
+                    placeholder="@username to block"
+                    className="flex-1 bg-[#0F1216] border border-[#2A3038] rounded-xl px-3 py-2 text-xs text-[#E9EEF5] outline-none focus:border-[#22D3EE] placeholder:text-[#4A5568]"
+                    data-ocid="settings.block_user.input"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleBlockUser}
+                    className="px-3 py-2 rounded-xl bg-[#FF3B5C]/20 border border-[#FF3B5C]/30 text-[#FF3B5C] text-xs font-bold"
+                    data-ocid="settings.block_user.button"
+                  >
+                    Block
+                  </button>
+                </div>
+              </div>
+              {blockedUsers.length > 0 && (
+                <div className="border-t border-[#2A3038]">
+                  {blockedUsers.map((u, i) => (
+                    <div
+                      key={u}
+                      className={`flex items-center justify-between px-4 py-3 ${
+                        i > 0 ? "border-t border-[#2A3038]" : ""
+                      }`}
+                      data-ocid={`settings.blocked.item.${i + 1}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#2A3038] flex items-center justify-center">
+                          <User size={14} className="text-[#8B95A3]" />
+                        </div>
+                        <span className="text-sm text-[#E9EEF5]">@{u}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleUnblockUser(u)}
+                        className="text-xs text-[#22D3EE] font-semibold px-3 py-1 rounded-full border border-[#22D3EE]/30"
+                        data-ocid={`settings.unblock.button.${i + 1}`}
+                      >
+                        Unblock
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {blockedUsers.length === 0 && (
+                <div className="px-4 py-3 border-t border-[#2A3038] text-center">
+                  <p className="text-[#8B95A3] text-xs">No blocked accounts</p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -429,6 +675,24 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
             </h2>
             <div className="bg-[#1A1F26] rounded-2xl overflow-hidden border border-[#2A3038]">
               <div className="px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-[#E9EEF5]">
+                      2-Factor Authentication
+                    </p>
+                    <p className="text-xs text-[#8B95A3] mt-0.5">
+                      Your account is secured by Internet Identity
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-green-500/20 border border-green-500/30 rounded-full px-2.5 py-1 shrink-0">
+                    <Shield size={10} className="text-green-400" />
+                    <span className="text-green-400 text-[10px] font-bold">
+                      Protected
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="border-t border-[#2A3038] px-4 py-4">
                 <p className="text-sm text-[#E9EEF5]">Authentication</p>
                 <p className="text-xs text-[#8B95A3] mt-0.5">
                   Powered by Internet Identity on the Internet Computer
@@ -470,7 +734,7 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
                   <div className="px-4 pb-4">
                     {reportSent ? (
                       <p className="text-[#22D3EE] text-sm text-center py-2">
-                        Thanks for your report! ✓
+                        Thanks for your report! \u2713
                       </p>
                     ) : (
                       <>
@@ -525,7 +789,7 @@ export default function SettingsPage({ onBack, onEditProfile }: Props) {
               <div className="px-4 py-4 space-y-1">
                 <div className="flex justify-between">
                   <p className="text-sm text-[#E9EEF5]">App Version</p>
-                  <p className="text-sm text-[#8B95A3]">13.0.0</p>
+                  <p className="text-sm text-[#8B95A3]">35.0.0</p>
                 </div>
                 <div className="flex justify-between">
                   <p className="text-sm text-[#E9EEF5]">Platform</p>

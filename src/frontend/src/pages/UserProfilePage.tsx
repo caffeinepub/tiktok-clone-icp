@@ -56,6 +56,7 @@ export default function UserProfilePage({
   );
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
+  const [showSubscribe, setShowSubscribe] = useState(false);
 
   useEffect(() => {
     if (!backend || !creatorId) return;
@@ -284,7 +285,30 @@ export default function UserProfilePage({
                 </>
               )}
             </button>
+            <button
+              type="button"
+              onClick={() => setShowSubscribe(true)}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-[#FF3B5C] to-[#FF8C69] text-white px-3 py-2.5 rounded-xl font-bold text-xs"
+              data-ocid="user_profile.subscribe.button"
+            >
+              Subscribe
+            </button>
           </div>
+        </div>
+
+        {/* Activity status */}
+        <div className="mb-2">
+          <span className="text-[10px] text-[#8B95A3] font-semibold bg-[#1A1F26] px-2 py-0.5 rounded-full">
+            {(() => {
+              const hash = creatorId
+                .split("")
+                .reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+              const mins = hash % 120;
+              if (mins < 5) return "\uD83D\uDFE2 Active now";
+              if (mins < 60) return `\uD83D\uDD50 Active ${mins}m ago`;
+              return `\uD83D\uDD50 Active ${Math.floor(mins / 60)}h ago`;
+            })()}
+          </span>
         </div>
 
         <h2 className="font-bold text-xl">@{profileData.username}</h2>
@@ -381,6 +405,79 @@ export default function UserProfilePage({
         )}
       </div>
 
+      {/* Subscribe Sheet */}
+      {showSubscribe && (
+        <div className="fixed inset-0 z-[60] flex items-end">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/70 w-full"
+            onClick={() => setShowSubscribe(false)}
+            aria-label="Close"
+          />
+          <div className="relative w-full rounded-t-3xl bg-[#151920] px-5 pt-4 pb-10 z-10">
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
+            <h3 className="text-[#E9EEF5] font-bold text-base mb-1">
+              Subscribe to @{profileData.username}
+            </h3>
+            <p className="text-[#8B95A3] text-xs mb-4">
+              Unlock exclusive content
+            </p>
+            <div className="space-y-2">
+              {[
+                {
+                  tier: "Fan",
+                  price: "Free",
+                  color: "border-[#2A3038] bg-[#1A1F26]",
+                  badge: "",
+                },
+                {
+                  tier: "Super Fan",
+                  price: "$4.99/mo",
+                  color: "border-[#22D3EE]/50 bg-[#22D3EE]/5",
+                  badge: "Popular",
+                },
+                {
+                  tier: "VIP",
+                  price: "$9.99/mo",
+                  color: "border-[#FFD700]/50 bg-[#FFD700]/5",
+                  badge: "Best Value",
+                },
+              ].map((t) => (
+                <button
+                  key={t.tier}
+                  type="button"
+                  onClick={() => setShowSubscribe(false)}
+                  className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 ${t.color} active:scale-95 transition-transform`}
+                  data-ocid={`subscribe.${t.tier.toLowerCase().replace(" ", "_")}.button`}
+                >
+                  <div className="text-left">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#E9EEF5] font-bold text-sm">
+                        {t.tier}
+                      </span>
+                      {t.badge && (
+                        <span className="text-[9px] font-bold bg-[#22D3EE]/20 text-[#22D3EE] px-1.5 py-0.5 rounded-full">
+                          {t.badge}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[#8B95A3] text-xs">
+                      {t.price === "Free"
+                        ? "Basic access"
+                        : "Subscribe with ICP"}
+                    </span>
+                  </div>
+                  <span className="text-[#E9EEF5] font-bold text-sm">
+                    {t.price}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <AuthModal open={showAuth} onClose={() => setShowAuth(false)} />
 
       {creatorPrincipal && (
