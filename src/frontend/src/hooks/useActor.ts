@@ -9,34 +9,60 @@ const ACTOR_QUERY_KEY = "actor";
 export function useActor() {
   const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
-  const actorQuery = useQuery<backendInterface>({
+  const actorQuery = useQuery<backendInterface | null>({
     queryKey: [ACTOR_QUERY_KEY, identity?.getPrincipal().toString()],
     queryFn: async () => {
       const isAuthenticated = !!identity;
 
-      if (!isAuthenticated) {
-        // Return anonymous actor if not authenticated
-        return await createActorWithConfig();
-      }
-
-      const actorOptions = {
-        agentOptions: {
-          identity,
-        },
-      };
-
-      const actor = await createActorWithConfig(actorOptions);
-      // Wrap in try/catch — failure here must NOT block the actor from being returned
       try {
-        const adminToken = getSecretParameter("caffeineAdminToken") || "";
-        await actor._initializeAccessControlWithSecret(adminToken);
+        if (!isAuthenticated) {
+          // Return anonymous actor if not authenticated
+          const anonActor = await createActorWithConfig();
+          return anonActor;
+        }
+
+        const actorOptions = {
+          agentOptions: {
+            identity,
+          },
+        };
+
+        const actor = await createActorWithConfig(actorOptions);
+
+        // Try to initialize access control, but never let it block actor creation
+        try {
+          const adminToken = getSecretParameter("caffeineAdminToken") || "";
+          await actor._initializeAccessControlWithSecret(adminToken);
+        } catch {
+          // Ignore initialization errors — actor is still usable
+        }
+
+        return actor;
       } catch {
-        // Initialization failure is non-fatal; proceed with the actor as-is
+        // If actor creation fails, retry once after a delay
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        try {
+          if (!isAuthenticated) {
+            return await createActorWithConfig();
+          }
+          const retryActor = await createActorWithConfig({
+            agentOptions: { identity },
+          });
+          try {
+            const adminToken = getSecretParameter("caffeineAdminToken") || "";
+            await retryActor._initializeAccessControlWithSecret(adminToken);
+          } catch {
+            // Ignore
+          }
+          return retryActor;
+        } catch {
+          return null;
+        }
       }
-      return actor;
     },
     // Only refetch when identity changes
     staleTime: Number.POSITIVE_INFINITY,
+    // This will cause the actor to be recreated when the identity changes
     enabled: true,
   });
 

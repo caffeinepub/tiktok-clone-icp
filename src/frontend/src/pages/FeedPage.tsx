@@ -670,7 +670,7 @@ function VideoCard({
         </AnimatePresence>
 
         {/* 3-dot menu — top right */}
-        <div className="absolute top-12 right-3 z-20">
+        <div className="absolute top-16 right-3 z-30">
           <button
             type="button"
             onClick={(e) => {
@@ -733,7 +733,7 @@ function VideoCard({
         )}
 
         {/* Right sidebar actions */}
-        <div className="absolute right-3 bottom-24 flex flex-col items-center gap-5 z-10">
+        <div className="absolute right-3 bottom-24 flex flex-col items-center gap-4 z-20">
           {/* Creator avatar + follow */}
           <button
             type="button"
@@ -889,7 +889,7 @@ function VideoCard({
         </div>
 
         {/* Caption overlay */}
-        <div className="absolute bottom-20 left-3 right-16 z-10 pr-2">
+        <div className="absolute bottom-24 left-3 right-16 z-20 pr-2">
           <button
             type="button"
             onClick={(e) => {

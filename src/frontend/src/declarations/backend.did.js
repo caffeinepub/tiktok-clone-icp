@@ -118,6 +118,16 @@ const Duet = IDL.Record({
   createdAt: IDL.Int,
 });
 
+const CallSignal = IDL.Record({
+  id: IDL.Text,
+  caller: IDL.Principal,
+  callee: IDL.Principal,
+  signalType: IDL.Text,
+  payload: IDL.Text,
+  callType: IDL.Text,
+  createdAt: IDL.Int,
+});
+
 const UserRole = IDL.Variant({
   admin: IDL.Null,
   user: IDL.Null,
@@ -258,6 +268,9 @@ export const idlService = IDL.Service({
   addStoryComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
   getStoryComments: IDL.Func([IDL.Text], [IDL.Vec(StoryComment)], ['query']),
   deleteStoryComment: IDL.Func([IDL.Text], [IDL.Bool], []),
+  storeCallSignal: IDL.Func([IDL.Principal, IDL.Text, IDL.Text, IDL.Text], [IDL.Text], []),
+  getCallSignals: IDL.Func([IDL.Opt(IDL.Principal)], [IDL.Vec(CallSignal)], ['query']),
+  clearCallSignals: IDL.Func([IDL.Vec(IDL.Text)], [], []),
   getCallerUserRole: IDL.Func([], [UserRole], ['query']),
   isCallerAdmin: IDL.Func([], [IDL.Bool], ['query']),
   assignCallerUserRole: IDL.Func([IDL.Principal, UserRole], [], []),
@@ -361,6 +374,15 @@ export const idlFactory = ({ IDL }) => {
     videoKey: IDL.Text,
     thumbnailKey: IDL.Text,
     caption: IDL.Text,
+    createdAt: IDL.Int,
+  });
+  const CallSignal = IDL.Record({
+    id: IDL.Text,
+    caller: IDL.Principal,
+    callee: IDL.Principal,
+    signalType: IDL.Text,
+    payload: IDL.Text,
+    callType: IDL.Text,
     createdAt: IDL.Int,
   });
   const UserRole = IDL.Variant({
@@ -496,6 +518,9 @@ export const idlFactory = ({ IDL }) => {
     addStoryComment: IDL.Func([IDL.Text, IDL.Text], [IDL.Text], []),
     getStoryComments: IDL.Func([IDL.Text], [IDL.Vec(StoryComment)], ['query']),
     deleteStoryComment: IDL.Func([IDL.Text], [IDL.Bool], []),
+    storeCallSignal: IDL.Func([IDL.Principal, IDL.Text, IDL.Text, IDL.Text], [IDL.Text], []),
+    getCallSignals: IDL.Func([IDL.Opt(IDL.Principal)], [IDL.Vec(CallSignal)], ['query']),
+    clearCallSignals: IDL.Func([IDL.Vec(IDL.Text)], [], []),
     getCallerUserRole: IDL.Func([], [UserRole], ['query']),
     isCallerAdmin: IDL.Func([], [IDL.Bool], ['query']),
     assignCallerUserRole: IDL.Func([IDL.Principal, UserRole], [], []),

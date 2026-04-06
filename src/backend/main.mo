@@ -134,6 +134,17 @@ actor {
     createdAt : Int;
   };
 
+  // ===== CALL SIGNALING =====
+  public type CallSignal = {
+    id : Text;
+    caller : Principal;
+    callee : Principal;
+    signalType : Text; // "offer" | "answer" | "ice" | "hangup" | "decline"
+    payload : Text;   // JSON-encoded SDP or ICE candidate
+    callType : Text;  // "video" | "voice"
+    createdAt : Int;
+  };
+
   stable var _users : [(Text, UserProfile)] = [];
   stable var _coverPhotoKeys : [(Text, Text)] = [];
   stable var _videos : [(Text, Video)] = [];
@@ -158,6 +169,7 @@ actor {
   stable var _storyComments : [(Text, StoryComment)] = [];
   stable var _storyReactions : [(Text, StoryReaction)] = [];
   stable var _followRequests : [(Text, FollowRequest)] = [];
+  stable var _callSignals : [(Text, CallSignal)] = [];
   stable var _videoCounter : Nat = 0;
   stable var _commentCounter : Nat = 0;
   stable var _notifCounter : Nat = 0;
@@ -170,6 +182,7 @@ actor {
   stable var _storyCommentCounter : Nat = 0;
   stable var _storyReactionCounter : Nat = 0;
   stable var _followRequestCounter : Nat = 0;
+  stable var _callSignalCounter : Nat = 0;
 
   var users : Map.Map<Text, UserProfile> = Map.fromArray(_users);
   var coverPhotoKeys : Map.Map<Text, Text> = Map.fromArray(_coverPhotoKeys);
@@ -195,6 +208,7 @@ actor {
   var storyComments : Map.Map<Text, StoryComment> = Map.fromArray(_storyComments);
   var storyReactions : Map.Map<Text, StoryReaction> = Map.fromArray(_storyReactions);
   var followRequests : Map.Map<Text, FollowRequest> = Map.fromArray(_followRequests);
+  var callSignals : Map.Map<Text, CallSignal> = Map.fromArray(_callSignals);
 
   system func preupgrade() {
     _users := users.toArray();
@@ -221,6 +235,7 @@ actor {
     _storyComments := storyComments.toArray();
     _storyReactions := storyReactions.toArray();
     _followRequests := followRequests.toArray();
+    _callSignals := callSignals.toArray();
   };
 
   func pkey(p : Principal) : Text = p.toText();
@@ -237,6 +252,7 @@ actor {
   func nextStoryCommentId() : Text { _storyCommentCounter += 1; "sc" # _storyCommentCounter.toText() };
   func nextStoryReactionId() : Text { _storyReactionCounter += 1; "sr" # _storyReactionCounter.toText() };
   func nextFollowRequestId() : Text { _followRequestCounter += 1; "fr" # _followRequestCounter.toText() };
+  func nextCallSignalId() : Text { _callSignalCounter += 1; "cs" # _callSignalCounter.toText() };
 
   func hasPrincipal(arr : [Principal], p : Principal) : Bool {
     var found = false;
@@ -269,6 +285,7 @@ actor {
   func comparePostDesc(a : Post, b : Post) : Order.Order = Int.compare(b.createdAt, a.createdAt);
   func compareMessageAsc(a : Message, b : Message) : Order.Order = Int.compare(a.createdAt, b.createdAt);
   func compareDuetDesc(a : Duet, b : Duet) : Order.Order = Int.compare(b.createdAt, a.createdAt);
+  func compareSignalAsc(a : CallSignal, b : CallSignal) : Order.Order = Int.compare(a.createdAt, b.createdAt);
 
   func createNotif(recipient : Principal, sender : Principal, notifType : Text, videoId : ?Text) {
     if (Principal.equal(recipient, sender)) return;
@@ -315,7 +332,6 @@ actor {
     let current = following.get(key).get([]);
     if (hasPrincipal(current, target)) return;
     if (isPrivateAccount(target)) {
-      // Check if a pending request already exists
       var exists = false;
       for ((_, req) in followRequests.entries()) {
         if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) { exists := true };
@@ -334,7 +350,6 @@ actor {
   public shared ({ caller }) func unfollowUser(target : Principal) : async () {
     let key = pkey(caller);
     following.add(key, removePrincipal(following.get(key).get([]), target));
-    // Also remove any pending follow request
     for ((reqId, req) in followRequests.entries()) {
       if (Principal.equal(req.from, caller) and Principal.equal(req.to, target)) {
         followRequests.remove(reqId);
@@ -811,7 +826,6 @@ actor {
 
   // ===== STORY REACTIONS =====
   public shared ({ caller }) func addStoryReaction(storyId : Text, emoji : Text) : async () {
-    // Remove existing reaction from this user for this story
     for ((rId, r) in storyReactions.entries()) {
       if (r.storyId == storyId and Principal.equal(r.user, caller)) {
         storyReactions.remove(rId);
@@ -1066,6 +1080,52 @@ actor {
         if (not Principal.equal(c.author, caller)) return false;
         storyComments.remove(commentId);
         true;
+      };
+    };
+  };
+
+  // ===== CALL SIGNALING =====
+  // Store a WebRTC signaling message (offer/answer/ice/hangup/decline)
+  public shared ({ caller }) func storeCallSignal(callee : Principal, signalType : Text, payload : Text, callType : Text) : async Text {
+    // Clean up old signals for this conversation (> 2 minutes old)
+    let cutoff = Time.now() - 120_000_000_000;
+    for ((sid, sig) in callSignals.entries()) {
+      if (sig.createdAt < cutoff) {
+        callSignals.remove(sid);
+      };
+    };
+    let id = nextCallSignalId();
+    callSignals.add(id, { id; caller; callee; signalType; payload; callType; createdAt = Time.now() });
+    id;
+  };
+
+  // Get pending signals for the caller (as callee) - used to detect incoming calls / ICE candidates
+  public shared query ({ caller }) func getCallSignals(fromPrincipal : ?Principal) : async [CallSignal] {
+    var arr : [CallSignal] = [];
+    for ((_, sig) in callSignals.entries()) {
+      let isForMe = Principal.equal(sig.callee, caller);
+      let fromMatch = switch (fromPrincipal) {
+        case null true;
+        case (?p) Principal.equal(sig.caller, p);
+      };
+      if (isForMe and fromMatch) {
+        arr := arr.concat([sig]);
+      };
+    };
+    arr.sort(compareSignalAsc);
+  };
+
+  // Clear consumed signals
+  public shared ({ caller }) func clearCallSignals(signalIds : [Text]) : async () {
+    for (sid in signalIds.values()) {
+      switch (callSignals.get(sid)) {
+        case null {};
+        case (?sig) {
+          // Only callee can clear signals directed to them
+          if (Principal.equal(sig.callee, caller)) {
+            callSignals.remove(sid);
+          };
+        };
       };
     };
   };

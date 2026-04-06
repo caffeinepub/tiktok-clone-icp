@@ -1,7 +1,7 @@
 import { Camera, Image, Mic, Phone, Send, Smile, Video, X } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import CallOverlay from "../components/CallOverlay";
+import { useCallContext } from "../components/WebRTCCallProvider";
 import { useBackend } from "../hooks/useBackend";
 import { timeAgo } from "../types/app";
 
@@ -66,11 +66,10 @@ export default function ChatPage({
   onBack: () => void;
 }) {
   const { backend, identity } = useBackend();
+  const callContext = useCallContext();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [callOpen, setCallOpen] = useState(false);
-  const [callType, setCallType] = useState<"video" | "voice">("video");
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [typingVisible] = useState(false);
@@ -152,13 +151,11 @@ export default function ChatPage({
   };
 
   const openVideoCall = () => {
-    setCallType("video");
-    setCallOpen(true);
+    callContext.startCall(otherPrincipal, username, avatarUrl, "video");
   };
 
   const openVoiceCall = () => {
-    setCallType("voice");
-    setCallOpen(true);
+    callContext.startCall(otherPrincipal, username, avatarUrl, "voice");
   };
 
   // Group messages by date
@@ -592,15 +589,7 @@ export default function ChatPage({
         )}
       </AnimatePresence>
 
-      {/* Call Overlay */}
-      <CallOverlay
-        open={callOpen}
-        username={username}
-        avatarUrl={avatarUrl}
-        callType={callType}
-        onDecline={() => setCallOpen(false)}
-        onAccept={() => setCallOpen(false)}
-      />
+      {/* Call Overlay is now global via WebRTCCallProvider */}
     </motion.div>
   );
 }

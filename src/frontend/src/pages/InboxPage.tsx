@@ -12,7 +12,7 @@ import {
 import { motion } from "motion/react";
 import { useCallback, useEffect, useState } from "react";
 import AuthModal from "../components/AuthModal";
-import CallOverlay from "../components/CallOverlay";
+import { useCallContext } from "../components/WebRTCCallProvider";
 import { useBackend } from "../hooks/useBackend";
 import { useStorageClient } from "../hooks/useStorageClient";
 import { timeAgo } from "../types/app";
@@ -109,6 +109,7 @@ export default function InboxPage({
   onOpenChat: (principal: string, username: string, avatarUrl: string) => void;
 }) {
   const { isLoggedIn, backend } = useBackend();
+  const callContext = useCallContext();
   const thumbStorageClient = useStorageClient("thumbnails");
   const [showAuth, setShowAuth] = useState(!isLoggedIn);
   const [activeTab, setActiveTab] = useState<InboxTab>("notifications");
@@ -120,12 +121,6 @@ export default function InboxPage({
     null,
   );
   const [msgSearch, setMsgSearch] = useState("");
-  const [callOpen, setCallOpen] = useState(false);
-  const [callTarget, setCallTarget] = useState<{
-    username: string;
-    avatarUrl: string;
-    type: "video" | "voice";
-  } | null>(null);
 
   const handleAcceptFollowRequest = async (senderId: string) => {
     if (!backend) return;
@@ -301,12 +296,12 @@ export default function InboxPage({
   );
 
   const openCall = (
+    principal: string,
     username: string,
     avatarUrl: string,
     type: "video" | "voice",
   ) => {
-    setCallTarget({ username, avatarUrl, type });
-    setCallOpen(true);
+    callContext.startCall(principal, username, avatarUrl, type);
   };
 
   if (showAuth) {
@@ -826,7 +821,12 @@ export default function InboxPage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openCall(conv.username, conv.avatarUrl, "video");
+                            openCall(
+                              conv.otherPrincipal,
+                              conv.username,
+                              conv.avatarUrl,
+                              "video",
+                            );
                           }}
                           className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
                           style={{ background: "oklch(0.20 0.018 15)" }}
@@ -842,7 +842,12 @@ export default function InboxPage({
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            openCall(conv.username, conv.avatarUrl, "voice");
+                            openCall(
+                              conv.otherPrincipal,
+                              conv.username,
+                              conv.avatarUrl,
+                              "voice",
+                            );
                           }}
                           className="w-8 h-8 rounded-full flex items-center justify-center active:scale-90 transition-transform"
                           style={{ background: "oklch(0.20 0.018 15)" }}
@@ -864,23 +869,7 @@ export default function InboxPage({
         </div>
       )}
 
-      {/* Call overlay */}
-      {callTarget && (
-        <CallOverlay
-          open={callOpen}
-          username={callTarget.username}
-          avatarUrl={callTarget.avatarUrl}
-          callType={callTarget.type}
-          onDecline={() => {
-            setCallOpen(false);
-            setCallTarget(null);
-          }}
-          onAccept={() => {
-            setCallOpen(false);
-            setCallTarget(null);
-          }}
-        />
-      )}
+      {/* Call overlay is now global via WebRTCCallProvider */}
     </div>
   );
 }

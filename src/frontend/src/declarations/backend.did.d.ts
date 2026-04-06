@@ -107,6 +107,15 @@ export interface Duet {
   caption: string;
   createdAt: bigint;
 }
+export interface CallSignal {
+  id: string;
+  caller: Principal;
+  callee: Principal;
+  signalType: string;
+  payload: string;
+  callType: string;
+  createdAt: bigint;
+}
 export type UserRole = { admin: null } | { user: null } | { guest: null };
 export interface UserStats {
   videoCount: bigint;
@@ -219,6 +228,10 @@ export interface _SERVICE {
   addStoryComment: ActorMethod<[string, string], string>;
   getStoryComments: ActorMethod<[string], StoryComment[]>;
   deleteStoryComment: ActorMethod<[string], boolean>;
+  // Call signaling
+  storeCallSignal: ActorMethod<[Principal, string, string, string], string>;
+  getCallSignals: ActorMethod<[[] | [Principal]], CallSignal[]>;
+  clearCallSignals: ActorMethod<[string[]], void>;
   getCallerUserRole: ActorMethod<[], UserRole>;
   isCallerAdmin: ActorMethod<[], boolean>;
   assignCallerUserRole: ActorMethod<[Principal, UserRole], void>;
